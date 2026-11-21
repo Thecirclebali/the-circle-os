@@ -166,7 +166,7 @@ function partBal(p, pays) {
   const paid = sum(ps.filter(x => x.kind !== 'Remboursement'), x => x.eur_final);
   const refund = -sum(ps.filter(x => x.kind === 'Remboursement'), x => x.eur_final);
   const net = paid - refund;
-  const due = INACTIVE.includes(p.status) ? net : N(p.price_eur);
+  const due = INACTIVE.includes(p.status) || p.status === 'Reporté' ? net : N(p.price_eur);
   const reste = Math.max(due - net, 0);
   return { p, pays: ps, paid, refund, net, due, reste, pct: due > 0 ? net / due : 1 };
 }
@@ -174,10 +174,12 @@ const isEnded = e => e && (e.status === 'Terminée' || (e.end_date && e.end_date
 function edStats(id, D) {
   const ed = D.eds.find(e => e.id === id) || { id, skill: id };
   const parts = D.parts.filter(p => p.edition_id === id).map(p => partBal(p, D.pays));
-  const active = parts.filter(b => !INACTIVE.includes(b.p.status));
+  const active = parts.filter(b => !INACTIVE.includes(b.p.status) && b.p.status !== 'Reporté');
+  const reported = parts.filter(b => b.p.status === 'Reporté'), repIds = reported.map(b => b.p.id);
+  const avoirs = sum(reported, b => b.net);
   const pays = D.pays.filter(x => x.edition_id === id), exps = D.exps.filter(x => x.edition_id === id);
-  const enc = sum(pays, x => x.eur_final);
-  const attendu = sum(parts, b => b.due), reste = sum(parts, b => b.reste);
+  const enc = sum(pays.filter(x => !repIds.includes(x.participant_id)), x => x.eur_final);
+  const attendu = sum(parts.filter(b => b.p.status !== 'Reporté'), b => b.due), reste = sum(parts, b => b.reste);
   const costs = exps.filter(x => x.type !== 'Frais fondateurs'), adv = exps.filter(x => x.type === 'Frais fondateurs');
   const couts = sum(costs, x => x.amount_eur);
   const avY = sum(adv.filter(x => x.founder === 'Youssef'), x => x.amount_eur), avN = sum(adv.filter(x => x.founder === 'Nahed'), x => x.amount_eur), avX = sum(adv.filter(x => !x.founder), x => x.amount_eur);
@@ -187,7 +189,7 @@ function edStats(id, D) {
   const now = split(enc - couts);
   const coutsPrev = Math.max(couts, budget);
   const prev = split(enc + reste - coutsPrev);
-  return { ed, parts, active, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
+  return { ed, parts, active, reported, avoirs, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
 }
 function accountBalances(D, edId) {
   const pays = edId ? D.pays.filter(x => x.edition_id === edId) : D.pays, exps = edId ? D.exps.filter(x => x.edition_id === edId) : D.exps;
@@ -205,6 +207,7 @@ function clarify(D, edId) {
   const groups = [];
   const add = (title, explain, items, kind = 'warn') => { if (items.length) groups.push({ title, explain, items, kind, total: sum(items, i => i.amount) }); };
   add('Participants qui n’ont pas tout payé', 'Montant encore attendu par personne.', parts.filter(b => b.reste > 1).map(b => ({ label: `${b.p.full_name} · ${b.p.edition_id}`, amount: b.reste, act: `data-act="part" data-id="${b.p.id}"` })));
+  add('Avoirs : tranches gardées pour une prochaine édition', 'Personnes qui ne sont pas venues. Quand elles choisissent leur nouvelle édition, changez le bootcamp dans leur fiche et dans leurs paiements.', parts.filter(b => b.p.status === 'Reporté' && b.net > 0).map(b => ({ label: `${b.p.full_name} · ${b.p.edition_id}`, amount: b.net, act: `data-act="part" data-id="${b.p.id}"` })));
   add('Encaissements sans compte', 'On ne sait pas sur quel compte l’argent est arrivé.', pays.filter(x => !x.account).map(x => ({ label: `${pn(x.participant_id)} · ${fmtD(x.paid_on)}`, amount: x.eur_final, act: `data-act="edit" data-t="payments" data-id="${x.id}"` })));
   add('Dinars pas encore convertis', `Calculés au taux fixe de ${NUM(fx())} TND pour 1 €. Indiquez les euros réellement obtenus après le change.`, pays.filter(x => x.currency !== 'EUR' && x.eur_received == null).map(x => ({ label: `${pn(x.participant_id)} · ${NUM(x.amount)} ${x.currency}`, amount: Math.abs(N(x.eur_final)), act: `data-act="edit" data-t="payments" data-id="${x.id}"` })));
   add('Dates approximatives', 'Encaissements dont la date ou le mois est estimé.', pays.filter(x => /approx/i.test(x.notes || '')).map(x => ({ label: `${pn(x.participant_id)} · ${fmtD(x.paid_on)}`, amount: x.eur_final, act: `data-act="edit" data-t="payments" data-id="${x.id}"` })), 'mute');
@@ -235,7 +238,7 @@ function gainTable(st, title = 'Calcul du gain') {
   ${row('<b>Youssef : reste à toucher</b>', `<b class="${g.resteY < 0 ? 'neg' : ''}">${EUR(g.resteY)}</b>`, `<b>${EUR(p.resteY)}</b>`, 'hl')}
   ${row('Nahed : déjà pris', '− ' + EUR(st.avN + st.avX / 2), '− ' + EUR(st.avN + st.avX / 2))}
   ${row('<b>Nahed : reste à toucher</b>', `<b class="${g.resteN < 0 ? 'neg' : ''}">${EUR(g.resteN)}</b>`, `<b>${EUR(p.resteN)}</b>`, 'hl')}
-  </tbody></table></div>${st.avX ? `<p class="muted">${EUR(st.avX)} d’avances sans fondateur indiqué : comptées moitié-moitié.</p>` : ''}<p class="muted">« Déjà pris » = dépenses de type « Avance sur gain » (argent de The Circle utilisé pour un fondateur). Un montant négatif veut dire que la personne a pris plus que sa part pour l’instant.</p></div>`;
+  </tbody></table></div>${st.avoirs ? `<p class="muted">${EUR(st.avoirs)} payés par ${st.reported.map(b => esc(b.p.full_name)).join(', ')} (reporté) : gardés pour une prochaine édition, non comptés ici.</p>` : ''}${st.avX ? `<p class="muted">${EUR(st.avX)} d’avances sans fondateur indiqué : comptées moitié-moitié.</p>` : ''}<p class="muted">« Déjà pris » = dépenses de type « Avance sur gain » (argent de The Circle utilisé pour un fondateur). Un montant négatif veut dire que la personne a pris plus que sa part pour l’instant.</p></div>`;
 }
 
 /* ---------- Layout ---------- */
@@ -373,7 +376,7 @@ V.edition = async id => {
   let body = '';
   if (edTab === 'resume') {
     const cats = {}; s.costs.forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
-    body = `<div class="grid g4">${kpi('Participants', `${s.active.length} / ${e.capacity}`, s.parts.length - s.active.length ? `${s.parts.length - s.active.length} exclu(s) / annulé(s)` : '')}${kpi('Encaissé', EUR(s.enc), `sur ${EUR(s.attendu)} attendus · reste ${EUR(s.reste)}`)}${kpi('Dépenses', EUR(s.couts), s.budget ? `budget prévu ${EUR(s.budget)}` : 'pas de budget saisi')}${kpi('Gain chacun aujourd’hui', EUR(s.now.part), `prévu : ${EUR(s.prev.part)}`)}</div>
+    body = `<div class="grid g4">${kpi('Participants', `${s.active.length} / ${e.capacity}`, s.parts.length - s.active.length ? `${s.parts.length - s.active.length} absent(s) : exclu, annulé ou reporté` : '')}${kpi('Encaissé', EUR(s.enc), `sur ${EUR(s.attendu)} attendus · reste ${EUR(s.reste)}`)}${kpi('Dépenses', EUR(s.couts), s.budget ? `budget prévu ${EUR(s.budget)}` : 'pas de budget saisi')}${kpi('Gain chacun aujourd’hui', EUR(s.now.part), `prévu : ${EUR(s.prev.part)}`)}</div>
     <div class="split"><div>${gainTable(s)}</div><div class="card"><div class="head"><h2>Encaissement par participant</h2></div>${payBars(s.parts)}
     <div class="head" style="margin-top:12px"><h2>Dépenses par catégorie</h2></div>${catChart(cats)}
     <div class="head" style="margin-top:12px"><h2>Dernières notes</h2><button class="btn sm" type="button" data-act="tab" data-v="journal">Tout le journal</button></div>${journalFeed(journal.slice(0, 4))}</div></div>`;
@@ -392,7 +395,7 @@ V.edition = async id => {
 };
 function payBars(parts) {
   if (!parts.length) return '<div class="empty-state">Aucun participant</div>';
-  return `<div class="paybars">${parts.sort((a, b) => a.pct - b.pct).map(b => `<button type="button" class="paybar click" data-act="part" data-id="${b.p.id}"><div class="pb-head"><b>${esc(b.p.full_name)}</b>${INACTIVE.includes(b.p.status) ? pill(b.p.status, 'bad') : ''}<span class="num">${EUR(b.net)} / ${EUR(b.due)}</span></div>${pbar(b.pct)}<div class="pb-foot">${b.reste > 1 ? `<span class="warn-t">Manque ${EUR(b.reste)}</span>` : '<span class="good-t">Soldé</span>'}${b.refund ? ` · remboursé ${EUR(b.refund)}` : ''} · ${b.pays.length} versement(s)</div></button>`).join('')}</div>`;
+  return `<div class="paybars">${parts.sort((a, b) => a.pct - b.pct).map(b => `<button type="button" class="paybar click" data-act="part" data-id="${b.p.id}"><div class="pb-head"><b>${esc(b.p.full_name)}</b>${INACTIVE.includes(b.p.status) ? pill(b.p.status, 'bad') : b.p.status === 'Reporté' ? pill('Reporté', 'warn') : ''}<span class="num">${EUR(b.net)} / ${EUR(b.due)}</span></div>${pbar(b.pct)}<div class="pb-foot">${b.p.status === 'Reporté' ? `<span class="warn-t">${EUR(b.net)} gardés pour une prochaine édition</span>` : b.reste > 1 ? `<span class="warn-t">Manque ${EUR(b.reste)}</span>` : '<span class="good-t">Soldé</span>'}${b.refund ? ` · remboursé ${EUR(b.refund)}` : ''} · ${b.pays.length} versement(s)</div></button>`).join('')}</div>`;
 }
 function payTable(pays, pn) {
   return `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Participant</th><th>Type</th><th>Compte</th><th class="n">Montant</th><th class="n">En euros</th><th></th></tr></thead><tbody>${pays.map(x => `<tr class="click" data-act="edit" data-t="payments" data-id="${x.id}"><td>${fmtD(x.paid_on)}</td><td>${esc(pn(x.participant_id))}</td><td>${x.kind === 'Remboursement' ? pill('Remboursement', 'bad') : esc(x.method || 'Paiement')}</td><td>${esc(x.account || '—')}</td><td class="n">${NUM(x.amount)} ${x.currency}</td><td class="n">${EUR(x.eur_final)}${x.currency !== 'EUR' ? `<div class="muted">${x.eur_received != null ? 'réel' : 'estimé'}</div>` : ''}</td><td>${x.proof_path ? pill('Preuve', 'good') : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty-state">Aucun encaissement</td></tr>'}</tbody></table></div>`;
