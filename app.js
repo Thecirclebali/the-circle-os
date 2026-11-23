@@ -37,7 +37,7 @@ const SOURCES = [['Formulaire', 'Formulaire pub (ads)'], ['Pub Meta', 'Pub Meta 
 const LEAD_STATUSES = ['Nouveau', 'Qualifié', 'Appel planifié', 'Offre envoyée', 'Tranche 1', 'Payé', 'Perdu'];
 const OWNERS = ['Youssef', 'Nahed', 'Les deux'];
 const CURR = ['EUR', 'TND', 'IDR'];
-const EXP_CATS = ['Villa', 'Coach', 'Excursions', 'Dîners', 'Courses maison', 'Petites dépenses', 'Surf & activités', 'Transport', 'Matériel & cadeaux', 'Publicité', 'Contenu & sponsoring', 'Visas', 'Banque & outils', 'Charges sociales', 'Assurance', 'Frais de change', 'Événements & meetups', 'Outils formation', 'Gain fondateurs', 'À clarifier'];
+const EXP_CATS = ['Villa', 'Coach', 'Excursions', 'Dîners', 'Courses maison', 'Petites dépenses', 'Surf & activités', 'Transport', 'Matériel & cadeaux', 'Publicité', 'Contenu & sponsoring', 'Visas', 'Banque & outils', 'Charges sociales', 'Assurance', 'Frais de change', 'Événements & meetups', 'Outils formation', 'Parrainage', 'Gain fondateurs', 'À clarifier'];
 const EXP_TYPES = [['Coût édition', 'Coût de l’édition'], ['Marketing', 'Marketing'], ['Structure', 'Structure (banque, charges…)'], ['Frais fondateurs', 'Avance sur gain d’un fondateur'], ['À clarifier', 'À clarifier']];
 const typeLabel = t => (EXP_TYPES.find(x => x[0] === t) || [t, t])[1];
 const DOC_TYPES = ['Contrat', 'CGV', 'Code de conduite', 'Règlement villa', 'Décharge', 'Droit image', 'Passeport', 'Visa', 'Assurance', 'Billets', 'Contact urgence', 'Fiche médicale'];
@@ -47,7 +47,7 @@ const PAID_BY = [['Caisse Circle', 'Argent de The Circle'], ['Youssef', 'Youssef
 /* Définition des formulaires : [clé, libellé, type, requis, options] */
 const SCHEMAS = {
   leads: { title: 'Personne / lead', fields: [['full_name', 'Nom et prénom', 'text', 1], ['phone', 'Téléphone / WhatsApp', 'text'], ['email', 'E-mail', 'email'], ['source', 'Vient de', 'select', 1, SOURCES], ['edition_id', 'Édition visée', 'edition'], ['status', 'Statut', 'select', 1, LEAD_STATUSES], ['country', 'Pays', 'text'], ['age', 'Âge', 'number'], ['room_type', 'Chambre', 'select', 0, ROOMS], ['proposed_price_eur', 'Prix proposé (€)', 'number'], ['referral_code_used', 'Code de parrainage utilisé', 'text'], ['next_action', 'Prochaine action', 'text'], ['next_action_date', "Date de l'action", 'date'], ['owner', 'Responsable', 'select', 0, OWNERS], ['consent_contact', 'Accepte d’être contacté', 'bool'], ['lost_reason', 'Motif de refus', 'text'], ['notes', 'Notes', 'textarea']] },
-  participants: { title: 'Participant', fields: [['full_name', 'Nom et prénom', 'text', 1], ['edition_id', 'Bootcamp', 'edition', 1], ['room_type', 'Chambre', 'select', 0, ROOMS], ['price_eur', 'Prix total à payer (€)', 'number', 1], ['pay_currency', 'Paie en', 'select', 1, ['EUR', 'TND']], ['status', 'Statut', 'select', 1, ['Confirmé', 'Reporté', 'Annulé', 'Exclu']], ['phone', 'Téléphone / WhatsApp', 'text'], ['email', 'E-mail', 'email'], ['instagram', 'Instagram', 'text'], ['birth_date', 'Date de naissance', 'date'], ['country', 'Pays', 'text'], ['city', 'Ville', 'text'], ['profession', 'Profession', 'text'], ['emergency_contact', "Contact d'urgence (nom, lien, téléphone)", 'text'], ['source', 'Vient de', 'select', 0, SOURCES], ['referred_by', 'Parrainé par (code)', 'text'], ['project', 'Projet / objectif', 'text'], ['last_contact', 'Dernier contact', 'date'], ['next_followup', 'Prochaine relance', 'date'], ['circle_club', 'Membre du Circle Club', 'bool'], ['ambassador', 'Ambassadeur', 'bool'], ['consent_marketing', 'Accepte de recevoir nos nouvelles', 'bool'], ['notes', 'Notes', 'textarea']] },
+  participants: { title: 'Participant', fields: [['full_name', 'Nom et prénom', 'text', 1], ['edition_id', 'Bootcamp', 'edition', 1], ['room_type', 'Chambre', 'select', 0, ROOMS], ['price_eur', 'Prix total à payer (€)', 'number', 1], ['pay_currency', 'Paie en', 'select', 1, ['EUR', 'TND']], ['status', 'Statut', 'select', 1, ['Confirmé', 'Reporté', 'Annulé', 'Exclu']], ['phone', 'Téléphone / WhatsApp', 'text'], ['email', 'E-mail', 'email'], ['instagram', 'Instagram', 'text'], ['birth_date', 'Date de naissance', 'date'], ['country', 'Pays', 'text'], ['city', 'Ville', 'text'], ['profession', 'Profession', 'text'], ['emergency_contact', "Contact d'urgence (nom, lien, téléphone)", 'text'], ['source', 'Vient de', 'select', 0, SOURCES], ['referred_by', 'Parrainé par (code)', 'text'], ['project', 'Projet / objectif', 'text'], ['last_contact', 'Dernier contact', 'date'], ['next_followup', 'Prochaine relance', 'date'], ['club_status', 'Circle Club', 'select', 0, ['Pas encore invité', 'Invité', 'Membre', 'Ne souhaite pas']], ['circle_club', 'Membre actif du Circle Club', 'bool'], ['ambassador', 'Ambassadeur', 'bool'], ['consent_marketing', 'Accepte de recevoir nos nouvelles', 'bool'], ['notes', 'Notes', 'textarea']] },
   payments: { title: 'Encaissement', fields: [['edition_id', 'Bootcamp', 'edition', 1], ['participant_id', 'Participant', 'participant'], ['kind', 'Type', 'select', 1, ['Paiement', 'Remboursement']], ['paid_on', 'Date', 'date', 1], ['amount', 'Montant reçu', 'number', 1], ['currency', 'Devise', 'select', 1, CURR], ['fx_rate', 'Taux (devise pour 1 €)', 'number', 1], ['eur_received', 'Euros réellement obtenus après le change (si connu)', 'number'], ['account', 'Arrivé sur quel compte', 'account'], ['method', 'Comment', 'select', 0, ['Virement', 'Espèces', 'Carte', 'USDT', 'Autre']], ['tranche_no', 'Tranche', 'select', 0, ['1', '2', '3']], ['invoice_no', 'N° de facture', 'text'], ['file', 'Preuve (capture, reçu)', 'file', 0, 'proof_path'], ['notes', 'Notes', 'textarea']] },
   expenses: { title: 'Dépense', fields: [['edition_id', 'Bootcamp', 'edition'], ['spent_on', 'Date', 'date'], ['description', 'Quoi', 'text', 1], ['category', 'Catégorie', 'select', 1, EXP_CATS], ['amount', 'Montant', 'number', 1], ['currency', 'Devise', 'select', 1, CURR], ['fx_rate', 'Taux (devise pour 1 €)', 'number', 1], ['type', 'Type', 'select', 1, EXP_TYPES], ['founder', 'Fondateur concerné (si avance sur gain)', 'select', 0, ['Youssef', 'Nahed']], ['paid_from', 'Sorti de quel compte', 'account'], ['paid_by', 'Qui a payé', 'select', 0, PAID_BY], ['reimbursed', 'Déjà remboursé à la personne', 'bool'], ['file', 'Facture / photo', 'file', 0, 'receipt_path'], ['notes', 'Détails', 'textarea']] },
   expense_lines: { title: 'Détail de la transaction', fields: [['label', 'Quoi', 'text', 1], ['category', 'Catégorie', 'select', 0, EXP_CATS], ['amount_eur', 'Montant (€)', 'number', 1], ['file', 'Facture / photo', 'file', 0, 'file_path']] },
@@ -59,13 +59,16 @@ const SCHEMAS = {
   incidents: { title: 'Incident', fields: [['occurred_on', 'Date', 'date', 1], ['edition_id', 'Bootcamp', 'edition'], ['type', 'Type', 'select', 1, ['Violence', 'Harcèlement', 'Santé', 'Accident', 'Vol', 'Drogue', 'Conflit', 'Autre']], ['description', 'Faits', 'textarea', 1], ['people_involved', 'Personnes concernées', 'text'], ['decision', 'Décision', 'textarea'], ['status', 'Statut', 'select', 1, ['Ouvert', 'Clos']], ['file', 'Rapport / preuve', 'file', 0, 'report_path']] },
   tasks: { title: 'Tâche', fields: [['title', 'Tâche', 'text', 1], ['due_date', 'Échéance', 'date'], ['owner', 'Responsable', 'select', 0, OWNERS], ['edition_id', 'Bootcamp', 'edition'], ['done', 'Faite', 'bool'], ['notes', 'Notes', 'textarea']] },
   decisions: { title: 'Décision', fields: [['decided_on', 'Date', 'date', 1], ['subject', 'Sujet', 'text', 1], ['decision', 'Décision', 'textarea', 1], ['ref', 'Référence', 'text']] },
-  edition_budget_lines: { title: 'Ligne de budget', fields: [['edition_id', 'Bootcamp', 'edition', 1], ['category', 'Poste', 'text', 1], ['amount_eur', 'Montant (€)', 'number', 1]] },
+  edition_budget_lines: { title: 'Poste de coût', fields: [['edition_id', 'Bootcamp', 'edition', 1], ['category', 'Nom du poste (ex. Villa)', 'text', 1], ['amount_eur', 'Prévu (€)', 'number', 1], ['paid', 'Payé (soldé)', 'bool'], ['paid_on', 'Payé le', 'date'], ['due_date', 'À payer avant le', 'date'], ['match_categories', 'Catégories de dépenses rattachées (séparées par des virgules)', 'text'], ['actual_manual', 'Réel forcé à la main (€) — sinon calculé depuis les dépenses', 'number'], ['notes', 'Notes', 'textarea'], ['sort', 'Ordre', 'number']] },
+  referral_rewards: { title: 'Récompense de parrainage', fields: [['referrer_id', 'Parrain', 'participant', 1], ['referred_participant_id', 'Filleul inscrit', 'participant'], ['referred_name', 'Nom du filleul', 'text'], ['amount_eur', 'Montant (€)', 'number', 1], ['status', 'Statut', 'select', 1, ['À verser', 'Versé', 'Déduit du prochain bootcamp', 'Annulé']], ['paid_on', 'Versé le', 'date'], ['notes', 'Notes', 'textarea']] },
+  club_events: { title: 'Événement du Circle Club', fields: [['title', 'Titre', 'text', 1], ['event_on', 'Date', 'date'], ['kind', 'Type', 'select', 1, ['Live en ligne', 'Meetup Tunis', 'Meetup Bali', 'Réunion annuelle', 'Afterwork', 'Masterclass alumni', 'Autre']], ['place', 'Lieu', 'text'], ['link', 'Lien (live, inscription)', 'text'], ['attendees', 'Participants (nombre)', 'number'], ['notes', 'Notes', 'textarea']] },
   transfers: { title: 'Retrait, change ou virement', fields: [['kind', 'Type', 'select', 1, ['Retrait espèces', 'Change de devises', 'Virement interne', 'Dépôt espèces']], ['done_on', 'Date', 'date'], ['edition_id', 'Bootcamp', 'edition'], ['from_account', 'Sorti de', 'account'], ['from_amount', 'Montant sorti', 'number'], ['from_currency', 'Devise sortie', 'select', 1, CURR], ['to_account', 'Arrivé sur', 'account'], ['to_amount', 'Montant arrivé', 'number'], ['to_currency', 'Devise arrivée', 'select', 1, CURR], ['file', 'Reçu / capture', 'file', 0, 'file_path'], ['notes', 'Notes', 'textarea']] },
   cash_counts: { title: 'Comptage de caisse', fields: [['account', 'Caisse', 'account', 1], ['counted_on', 'Date', 'date', 1], ['amount', 'Montant compté (dans la devise de la caisse)', 'number', 1], ['notes', 'Notes', 'text']] },
   accounts: { title: 'Compte', key: 'name', fields: [['name', 'Nom du compte', 'text', 1], ['holder', 'Titulaire', 'text'], ['currency', 'Devise', 'text'], ['notes', 'Notes', 'textarea'], ['sort', 'Ordre', 'number']] }
 };
 
-function fieldHtml([k, label, type, req, opt], v) {
+function fieldHtml(f, v) { const [, , type, , opt] = f; const half = ['date', 'number', 'bool', 'coach'].includes(type) || (type === 'select' && opt.length <= 7 && !opt.some(o => (Array.isArray(o) ? o[1] : o).length > 22)); return `<div class="fwrap ${half ? 'half' : 'full'}">${fieldHtml0(f, v)}</div>`; }
+function fieldHtml0([k, label, type, req, opt], v) {
   const id = 'f_' + k, r = req ? 'required' : '';
   let options = null;
   if (type === 'select') options = opt.map(o => Array.isArray(o) ? o : [o, o]);
@@ -197,7 +200,7 @@ function edStats(id, D) {
   const tr = (D.transfers || []).filter(t => t.edition_id === id && t.from_amount != null && t.to_amount != null);
   const fraisChange = sum(tr, t => toEur(t.from_amount, t.from_currency) - toEur(t.to_amount, t.to_currency));
   const now = split(enc - couts - fraisChange);
-  const coutsPrev = Math.max(couts, budget);
+  const P = postes(id, D); const coutsPrev = P.has ? Math.max(P.totPrev, couts) : couts;
   const prev = split(enc + reste - coutsPrev - fraisChange);
   return { ed, parts, active, reported, avoirs, fraisChange, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
 }
@@ -281,26 +284,54 @@ function gainTable(st, title = 'Calcul du gain') {
 }
 
 /* ---------- Layout ---------- */
+const IC = d => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  accueil: IC('<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
+  crm: IC('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>'),
+  annuaire: IC('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.5-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6-.2 4.8 1.3 5.5 4.4"/>'),
+  editions: IC('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+  participants: IC('<circle cx="10" cy="8" r="4"/><path d="M3 21c.9-4 3.7-6 7-6 1.5 0 2.9.4 4 1.2"/><path d="m15 19 2 2 4-4"/>'),
+  finances: IC('<rect x="3" y="6" width="18" height="14" rx="2.5"/><path d="M16 13h2M3 10h18M6 6V4.5A1.5 1.5 0 0 1 7.5 3H17"/>'),
+  alumni: IC('<path d="m12 3 10 5-10 5L2 8z"/><path d="M6 10.5V15c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.5"/>'),
+  partenaires: IC('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+  documents: IC('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'),
+  securite: IC('<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>'),
+  pilotage: IC('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>'),
+  reglages: IC('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
+  search: IC('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  plus: IC('<path d="M12 5v14M5 12h14"/>'),
+  check: IC('<path d="m5 12 5 5 9-10"/>'),
+  sun: IC('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moon: IC('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+  menu: IC('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+  whatsapp: IC('<path d="M20 11.6a8 8 0 0 1-11.8 7L4 20l1.4-4.1A8 8 0 1 1 20 11.6z"/><path d="M9 9.5c.3 1.6 1.9 3.6 3.6 4.3l1.2-1.1 1.7.8c-.2.9-1 1.6-2 1.5C10.8 14.8 8.6 12.6 8.4 10.9c-.1-1 .6-1.8 1.5-2l.8 1.7z"/>')
+};
+const NAV = [['', [['accueil', 'Accueil'], ['pilotage', 'Tâches & décisions']]], ['Personnes', [['crm', 'Prospects (CRM)'], ['annuaire', 'Annuaire'], ['participants', 'Participants'], ['alumni', 'Alumni & Circle Club']]], ['Bootcamps & argent', [['editions', 'Éditions'], ['finances', 'Finances']]], ['Organisation', [['partenaires', 'Partenaires'], ['documents', 'Documents'], ['securite', 'Sécurité'], ['reglages', 'Réglages']]]];
 const VIEWS = [['accueil', 'Accueil'], ['crm', 'CRM · prospects'], ['annuaire', 'Annuaire'], ['editions', 'Éditions'], ['participants', 'Participants'], ['finances', 'Finances'], ['alumni', 'Alumni & parrainage'], ['partenaires', 'Partenaires'], ['documents', 'Documents'], ['securite', 'Sécurité'], ['pilotage', 'Tâches & décisions'], ['reglages', 'Réglages']];
 function shell() {
   $('root').innerHTML = `<aside id="side">
     <div class="brand"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="13" fill="none" stroke="#4FB3A9" stroke-width="3"/><circle cx="17" cy="17" r="6" fill="none" stroke="#E8B04F" stroke-width="2"/></svg><div><b>THE CIRCLE</b><small>Bali · espace de gestion</small></div></div>
+    <button class="searchbtn" type="button" data-act="palette">${ICON.search}<span>Rechercher…</span><kbd>Ctrl K</kbd></button>
     <nav id="nav"></nav>
-    <div class="side-foot"><span>Connecté : ${esc(S.member?.display_name || S.user.email)}</span><button data-act="logout" type="button">Se déconnecter</button></div>
+    <div class="side-foot"><div class="me"><div class="avatar sm">${esc((S.member?.display_name || '?').slice(0, 1))}</div><div class="grow"><b>${esc(S.member?.display_name || S.user.email)}</b><small>${esc(S.user.email)}</small></div><button class="iconbtn" type="button" data-act="theme" title="Thème clair / sombre" aria-label="Changer de thème">${document.documentElement.dataset.theme === 'light' ? ICON.moon : ICON.sun}</button></div><button data-act="logout" type="button" class="logout">Se déconnecter</button></div>
   </aside>
-  <main><div class="top"><button class="btn menu-btn" data-act="menu" type="button" aria-label="Ouvrir le menu">Menu</button><div><h1 id="title"></h1><p id="subtitle"></p></div><div class="actions" id="actions"></div></div><div class="wrap" id="view"><div class="loading">Chargement…</div></div></main>
+  <main><div class="top"><button class="iconbtn menu-btn" data-act="menu" type="button" aria-label="Ouvrir le menu">${ICON.menu}</button><div class="titles"><div class="crumb" id="crumb"></div><h1 id="title"></h1><p id="subtitle"></p></div><div class="actions" id="actions"></div></div><div class="wrap" id="view"></div></main>
+  <nav class="bottombar"><a href="#accueil" data-k="accueil">${ICON.accueil}<span>Accueil</span></a><a href="#participants" data-k="participants">${ICON.participants}<span>Participants</span></a><button type="button" class="fabmini" data-act="fab" aria-label="Ajouter">${ICON.plus}</button><a href="#finances" data-k="finances">${ICON.finances}<span>Finances</span></a><button type="button" data-act="menu">${ICON.menu}<span>Menu</span></button></nav>
   <div class="fab-wrap"><div class="fab-menu" id="fabMenu">
-    <button type="button" data-act="add" data-t="leads" data-def="${J({ status: 'Nouveau', source: 'Formulaire' })}">Nouvelle personne (formulaire, pub…)</button>
-    <button type="button" data-act="add" data-t="participants" data-def="${J({ status: 'Confirmé', pay_currency: 'TND' })}">Nouveau participant</button>
-    <button type="button" data-act="add" data-t="payments" data-def="paydef">Encaissement</button>
-    <button type="button" data-act="add" data-t="expenses" data-def="expdef">Dépense</button>
-    <button type="button" data-act="photo">Photo d’un ticket (dépense à compléter)</button>
-    <button type="button" data-act="add" data-t="transfers" data-def="trdef">Retrait, change ou virement</button>
-    <button type="button" data-act="add" data-t="edition_journal" data-def="jdef">Note d’édition (remarque, problème, contenu)</button>
-    <button type="button" data-act="add" data-t="tasks" data-def="${J({ owner: 'Les deux' })}">Tâche</button>
-  </div><button class="fab" type="button" data-act="fab" aria-label="Ajouter">+</button></div><input type="file" id="photoIn" accept="image/*,.pdf" capture="environment" hidden>`;
+    <div class="fm-h">Ajouter</div>
+    <button type="button" data-act="add" data-t="leads" data-def="${J({ status: 'Nouveau', source: 'Formulaire' })}">${ICON.crm}<span><b>Une personne</b><small>venue d’un formulaire, d’une pub, d’un DM</small></span></button>
+    <button type="button" data-act="add" data-t="participants" data-def="${J({ status: 'Confirmé', pay_currency: 'TND' })}">${ICON.participants}<span><b>Un participant</b><small>inscrit à un bootcamp</small></span></button>
+    <button type="button" data-act="add" data-t="payments" data-def="paydef">${ICON.finances}<span><b>Un encaissement</b><small>paiement d’un participant</small></span></button>
+    <button type="button" data-act="add" data-t="expenses" data-def="expdef">${ICON.documents}<span><b>Une dépense</b><small>formulaire complet</small></span></button>
+    <button type="button" data-act="photo">${ICON.documents}<span><b>Photo d’un ticket</b><small>montant à compléter plus tard</small></span></button>
+    <button type="button" data-act="add" data-t="transfers" data-def="trdef">${ICON.finances}<span><b>Retrait, change, virement</b><small>argent qui change de compte</small></span></button>
+    <button type="button" data-act="add" data-t="edition_journal" data-def="jdef">${ICON.editions}<span><b>Note d’édition</b><small>remarque, problème, contenu filmé</small></span></button>
+    <button type="button" data-act="add" data-t="tasks" data-def="${J({ owner: 'Les deux' })}">${ICON.pilotage}<span><b>Tâche</b></span></button>
+  </div><button class="fab" type="button" data-act="fab" aria-label="Ajouter">${ICON.plus}</button></div><input type="file" id="photoIn" accept="image/*,.pdf" capture="environment" hidden>
+  <div id="pal" class="pal" hidden><div class="pal-box" role="dialog" aria-label="Recherche"><div class="pal-in">${ICON.search}<input id="palIn" placeholder="Chercher une personne, une édition, une page, une action…" autocomplete="off"><kbd>Échap</kbd></div><div id="palList" class="pal-list"></div></div></div>`;
 }
-function setHead(t, s, actions = '') { $('title').textContent = t; $('subtitle').textContent = s; $('actions').innerHTML = actions; }
+const skeleton = () => `<div class="grid g4">${'<div class="card sk"><i></i><i></i><i></i></div>'.repeat(4)}</div><div class="card sk tall"><i></i><i></i><i></i><i></i></div>`;
+function setHead(t, s, actions = '', crumb = '') { $('crumb').innerHTML = crumb; $('title').textContent = t; $('subtitle').textContent = s; $('actions').innerHTML = actions; }
 const edOpts = (cur, all = 'Toutes') => `<option value="">${all}</option>` + S.cache.editions.filter(e => !e.hidden).map(e => `<option ${e.id === cur ? 'selected' : ''} value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('');
 const currentEd = () => { const t = today(); const eds = S.cache.editions.filter(e => !e.hidden); return eds.find(e => e.start_date && e.end_date && e.start_date <= t && e.end_date >= t)?.id || eds.filter(e => e.start_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0]?.id || ''; };
 function defaultsFor(kind) {
@@ -400,24 +431,36 @@ async function quickSave() {
 /* ---------- Budget prévu / réel ---------- */
 const BUDGET_MAP = { 'Visas C9 + coach': ['Visas'], 'Surf, meet-ups, pick-ups': ['Surf & activités', 'Événements & meetups', 'Transport'], 'Courses maison': ['Courses maison', 'Petites dépenses'] };
 function budgetVsReal(s, D) {
-  const lines = D.budget.filter(b => b.edition_id === s.ed.id);
-  const real = {}; s.costs.forEach(x => real[x.category] = (real[x.category] || 0) + N(x.amount_eur));
-  const used = new Set();
-  const rows = lines.sort((a, b) => b.amount_eur - a.amount_eur).map(l => { const cats = BUDGET_MAP[l.category] || [l.category]; cats.forEach(c => used.add(c)); return { name: l.category, plan: N(l.amount_eur), real: sum(cats, c => real[c] || 0), id: l.id }; });
-  const others = Object.entries(real).filter(([c]) => !used.has(c));
-  const imp = rows.find(r => /impr[eé]vu/i.test(r.name));
-  if (imp) { imp.real += sum(others, o => o[1]); imp.detail = others.map(([c, v]) => `${c} ${EUR(v)}`).join(' · '); }
-  else others.forEach(([c, v]) => rows.push({ name: c, plan: 0, real: v }));
-  if (fraisOf(s)) rows.push({ name: 'Pertes de change (calculées)', plan: 0, real: fraisOf(s) });
-  const tp = sum(rows, r => r.plan), tr = sum(rows, r => r.real);
-  const copy = `<div class="inline"><select id="cbFrom">${D.eds.filter(e => e.id !== s.ed.id && D.budget.some(b => b.edition_id === e.id)).map(e => `<option value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('')}</select><button class="btn sm" type="button" data-act="copybudget" data-id="${s.ed.id}">Copier ce budget ici</button></div>`;
-  return `<div class="card"><div class="head"><h2>Prévu / réel par poste</h2><button class="btn sm" type="button" data-act="add" data-t="edition_budget_lines" data-def="${J({ edition_id: s.ed.id })}">+ Poste prévu</button></div>
-  ${lines.length ? '' : `<p class="muted">Pas encore de budget prévu pour cette édition. Copiez celui d’une autre édition, puis ajustez.</p>${copy}`}
-  <div class="table-wrap"><table class="bvr"><thead><tr><th>Poste</th><th class="n">Prévu</th><th class="n">Réel</th><th style="min-width:160px"></th><th class="n">Écart</th></tr></thead><tbody>
-  ${rows.map(r => { const over = r.plan && r.real > r.plan; return `<tr ${r.id ? `class="click" data-act="edit" data-t="edition_budget_lines" data-id="${r.id}"` : ''}><td>${esc(r.name)}${r.detail ? `<div class="muted">${esc(r.detail)}</div>` : ''}</td><td class="n">${r.plan ? EUR(r.plan) : '—'}</td><td class="n">${EUR(r.real)}</td><td>${r.plan ? pbar(r.real / r.plan, Math.round(r.real / r.plan * 100) + ' %').replace('class="pbar', `class="pbar ${over ? 'over' : ''}`) : ''}</td><td class="n ${over ? 'neg' : ''}">${r.plan ? (r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan) : 'hors budget'}</td></tr>`; }).join('')}
-  <tr class="sep"><td><b>Total</b></td><td class="n"><b>${EUR(tp)}</b></td><td class="n"><b>${EUR(tr)}</b></td><td>${tp ? pbar(tr / tp) : ''}</td><td class="n"><b class="${tr > tp && tp ? 'neg' : ''}">${tp ? EUR(tr - tp) : ''}</b></td></tr></tbody></table></div></div>`;
+  const P = postes(s.ed.id, D);
+  const copy = `<div class="inline"><select id="cbFrom">${D.eds.filter(e => e.id !== s.ed.id && D.budget.some(b => b.edition_id === e.id)).map(e => `<option value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('')}</select><button class="btn sm" type="button" data-act="copybudget" data-id="${s.ed.id}">Copier ces postes ici</button></div>`;
+  return `<div class="card"><div class="head"><h2>Coûts fixes : prévu, réel, prévision</h2><span class="pill ${P.paidN === P.rows.length && P.has ? 'good' : 'mute'}">${P.paidN} / ${P.rows.length} soldés</span><button class="btn sm" type="button" data-act="add" data-t="edition_budget_lines" data-def="${J({ edition_id: s.ed.id, paid: false, sort: 50 })}">+ Poste</button></div>
+  <p class="muted">Cochez un poste quand il est entièrement payé. Le réel se calcule tout seul avec les dépenses de la même catégorie (ou forcez-le à la main dans le poste). La prévision = le réel si c’est payé, sinon le plus grand entre le prévu et le réel. C’est elle qui sert au gain « si tout est payé ».</p>
+  ${P.has ? '' : `<div class="msg">Pas encore de postes pour cette édition. Copiez ceux d’une autre édition, puis ajustez.</div>${copy}`}
+  <div class="postes">${P.rows.map(r => { const over = r.plan && r.real > r.plan; return `<div class="poste ${r.l.paid ? 'paid' : ''}">
+    <button type="button" class="tick" data-act="togglepaid" data-id="${r.l.id}" data-v="${r.l.paid ? 0 : 1}" aria-label="${r.l.paid ? 'Marquer non payé' : 'Marquer payé'}">${r.l.paid ? ICON.check : ''}</button>
+    <div class="grow click" data-act="edit" data-t="edition_budget_lines" data-id="${r.l.id}"><div class="ph"><b>${esc(r.l.category)}</b>${r.manual ? pill('réel saisi à la main', 'mute') : ''}${r.l.due_date && !r.l.paid ? pill('avant le ' + fmtD(r.l.due_date), daysTo(r.l.due_date) < 0 ? 'bad' : 'warn') : ''}</div>
+    ${r.plan ? pbar(r.real / r.plan, `${EUR(r.real)} / ${EUR(r.plan)}`).replace('class="pbar', `class="pbar ${over ? 'over' : ''}`) : ''}
+    <div class="sub">${r.cats.length ? 'Dépenses : ' + esc(r.cats.join(', ')) : 'Tout ce qui n’entre dans aucun autre poste'}${r.detail ? ' · ' + esc(r.detail) : ''}</div></div>
+    <div class="pv"><small>Prévision</small><b class="num">${EUR(r.prev)}</b><small class="${over ? 'neg' : r.real < r.plan && r.l.paid ? 'good-t' : ''}">${r.plan ? (r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan) : ''}</small></div></div>`; }).join('')}
+  ${P.extra.map(x => `<div class="poste"><span class="tick dis"></span><div class="grow"><b>${esc(x.name)}</b><div class="sub">Hors postes (ajoutez un poste « Imprévus » pour les regrouper)</div></div><div class="pv"><small>Réel</small><b class="num">${EUR(x.real)}</b></div></div>`).join('')}</div>
+  ${P.has ? `<div class="ptot"><div><small>Prévu</small><b>${EUR(P.totPlan)}</b></div><div><small>Réel à ce jour</small><b>${EUR(P.totReal)}</b></div><div><small>Prévision finale</small><b>${EUR(P.totPrev)}</b></div><div><small>Écart prévu</small><b class="${P.totPrev > P.totPlan ? 'neg' : 'good-t'}">${(P.totPrev - P.totPlan > 0 ? '+' : '') + EUR(P.totPrev - P.totPlan)}</b></div></div>` : ''}</div>`;
 }
 const fraisOf = s => N(s.fraisChange);
+function postes(id, D) {
+  const costs = D.exps.filter(x => x.edition_id === id && x.type !== 'Frais fondateurs');
+  const real = {}; costs.forEach(x => real[x.category] = (real[x.category] || 0) + N(x.amount_eur));
+  const lines = D.budget.filter(b => b.edition_id === id).sort((a, b) => (a.sort ?? 100) - (b.sort ?? 100) || b.amount_eur - a.amount_eur);
+  const used = new Set();
+  const catsOf = l => (l.match_categories ? l.match_categories.split(',').map(x => x.trim()).filter(Boolean) : (/impr[eé]vu/i.test(l.category) ? [] : [l.category]));
+  const rows = lines.map(l => { const cats = catsOf(l); cats.forEach(c => used.add(c)); const calc = sum(cats, c => real[c] || 0); return { l, cats, calc, real: l.actual_manual != null ? N(l.actual_manual) : calc, manual: l.actual_manual != null, plan: N(l.amount_eur) }; });
+  const others = Object.entries(real).filter(([c]) => !used.has(c));
+  const imp = rows.find(r => !r.cats.length);
+  if (imp) { const o = sum(others, x => x[1]); imp.calc += o; if (!imp.manual) imp.real += o; imp.detail = others.map(([c, v]) => `${c} ${EUR(v)}`).join(' · '); }
+  rows.forEach(r => { r.prev = r.l.paid ? r.real : Math.max(r.plan, r.real); });
+  const extra = imp ? [] : others.map(([c, v]) => ({ name: c, real: v }));
+  const totPlan = sum(rows, r => r.plan), totReal = sum(rows, r => r.real) + sum(extra, x => x.real), totPrev = sum(rows, r => r.prev) + sum(extra, x => x.real);
+  return { rows, extra, totPlan, totReal, totPrev, has: rows.length > 0, paidN: rows.filter(r => r.l.paid).length };
+}
 function envelope(s) {
   const e = s.ed; if (!e.start_date || !e.end_date) return '';
   const envIdr = N(S.settings.enveloppe_courses_idr) || 4000000, envEur = toEur(envIdr, 'IDR');
@@ -572,18 +615,18 @@ V.annuaire = async () => {
   const edOf = id => D.eds.find(e => e.id === id);
   const P = D.parts;
   const cats = [
-    ['Participants en cours et à venir', P.filter(p => !INACTIVE.includes(p.status) && !isEnded(edOf(p.edition_id))).map(p => ({ n: p.full_name, s: `${edOf(p.edition_id)?.skill || ''} · ${p.edition_id}`, ph: p.phone, em: p.email, act: `data-act="part" data-id="${p.id}"` }))],
-    ['Alumni', P.filter(p => !INACTIVE.includes(p.status) && isEnded(edOf(p.edition_id))).map(p => ({ n: p.full_name, s: `${edOf(p.edition_id)?.skill || ''} · ${p.edition_id}`, ph: p.phone, em: p.email, act: `data-act="part" data-id="${p.id}"` }))],
-    ['Prospects', leads.filter(l => !['Payé', 'Perdu'].includes(l.status)).map(l => ({ n: l.full_name, s: `${l.status}${l.edition_id ? ' · ' + l.edition_id : ''}`, ph: l.phone, em: l.email, act: `data-act="edit" data-t="leads" data-id="${l.id}"` }))],
-    ['Coachs', D.parts.length >= 0 ? S.cache.partners.filter(p => p.type === 'Coach' && p.status !== 'Retiré').map(p => ({ n: p.name, s: p.role || 'Coach', ph: p.contact, act: `data-act="edit" data-t="partners" data-id="${p.id}"` })) : []],
-    ['Partenaires et prestataires', S.cache.partners.filter(p => p.type !== 'Coach' && p.status !== 'Retiré').map(p => ({ n: p.name, s: `${p.type}${p.role ? ' · ' + p.role : ''}`, ph: p.contact, act: `data-act="edit" data-t="partners" data-id="${p.id}"` }))],
-    ['Équipe', team.map(m => ({ n: m.display_name, s: m.role || '' }))],
-    ['Exclus, annulés, perdus', [...P.filter(p => INACTIVE.includes(p.status)).map(p => ({ n: p.full_name, s: `${p.status} · ${p.edition_id}`, ph: p.phone, act: `data-act="part" data-id="${p.id}"` })), ...leads.filter(l => l.status === 'Perdu').map(l => ({ n: l.full_name, s: `Prospect perdu${l.lost_reason ? ' · ' + l.lost_reason : ''}`, ph: l.phone, act: `data-act="edit" data-t="leads" data-id="${l.id}"` }))]]
+    ['Participants en cours et à venir', 'participants', { status: 'Confirmé', pay_currency: 'TND', edition_id: currentEd() }, P.filter(p => !INACTIVE.includes(p.status) && !isEnded(edOf(p.edition_id))).map(p => ({ n: p.full_name, s: `${edOf(p.edition_id)?.skill || ''} · ${p.edition_id}`, ph: p.phone, em: p.email, act: `data-act="part" data-id="${p.id}"` }))],
+    ['Alumni', 'participants', { status: 'Confirmé', pay_currency: 'TND', edition_id: D.eds.find(isEnded)?.id }, P.filter(p => !INACTIVE.includes(p.status) && isEnded(edOf(p.edition_id))).map(p => ({ n: p.full_name, s: `${edOf(p.edition_id)?.skill || ''} · ${p.edition_id}`, ph: p.phone, em: p.email, act: `data-act="part" data-id="${p.id}"` }))],
+    ['Prospects', 'leads', { status: 'Nouveau', source: 'Formulaire' }, leads.filter(l => !['Payé', 'Perdu'].includes(l.status)).map(l => ({ n: l.full_name, s: `${l.status}${l.edition_id ? ' · ' + l.edition_id : ''}`, ph: l.phone, em: l.email, act: `data-act="edit" data-t="leads" data-id="${l.id}"` }))],
+    ['Coachs', 'partners', { type: 'Coach' }, S.cache.partners.filter(p => p.type === 'Coach' && p.status !== 'Retiré').map(p => ({ n: p.name, s: p.role || 'Coach', ph: p.contact, act: `data-act="edit" data-t="partners" data-id="${p.id}"` }))],
+    ['Partenaires et prestataires', 'partners', { type: 'Prestataire' }, S.cache.partners.filter(p => p.type !== 'Coach' && p.status !== 'Retiré').map(p => ({ n: p.name, s: `${p.type}${p.role ? ' · ' + p.role : ''}`, ph: p.contact, act: `data-act="edit" data-t="partners" data-id="${p.id}"` }))],
+    ['Équipe', null, null, team.map(m => ({ n: m.display_name, s: m.role || '' }))],
+    ['Exclus, annulés, perdus', null, null, [...P.filter(p => INACTIVE.includes(p.status)).map(p => ({ n: p.full_name, s: `${p.status} · ${p.edition_id}`, ph: p.phone, act: `data-act="part" data-id="${p.id}"` })), ...leads.filter(l => l.status === 'Perdu').map(l => ({ n: l.full_name, s: `Prospect perdu${l.lost_reason ? ' · ' + l.lost_reason : ''}`, ph: l.phone, act: `data-act="edit" data-t="leads" data-id="${l.id}"` }))]]
   ];
   const qq = annQ.toLowerCase();
   const match = x => !qq || `${x.n} ${x.s} ${x.ph || ''} ${x.em || ''}`.toLowerCase().includes(qq);
   return `<div class="toolbar"><input type="search" id="annQ" placeholder="Rechercher un nom, un numéro, un e-mail…" value="${esc(annQ)}" class="search"></div>
-  <div class="grid g2">${cats.map(([title, items]) => { const it = items.filter(match).sort((a, b) => a.n.localeCompare(b.n)); return `<div class="card"><div class="head"><h2>${title}</h2>${pill(it.length, 'mute')}</div><div class="list">${it.map(x => `<div class="row person"><div class="avatar">${esc((x.n || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div><div class="grow ${x.act ? 'click' : ''}" ${x.act || ''}><div>${esc(x.n)}</div><div class="sub">${esc(x.s)}</div></div>${x.ph && /\d{6,}/.test(x.ph) ? `<a class="btn sm" href="${wa(x.ph)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${x.em ? `<a class="btn sm" href="mailto:${esc(x.em)}">E-mail</a>` : ''}</div>`).join('') || '<div class="empty-state">Personne</div>'}</div></div>`; }).join('')}</div>`;
+  <div class="grid g2">${cats.map(([title, tbl, def, items]) => { const it = items.filter(match).sort((a, b) => a.n.localeCompare(b.n)); return `<div class="card"><div class="head"><h2>${title}</h2>${pill(it.length, 'mute')}${tbl ? `<button class="iconbtn add" type="button" data-act="add" data-t="${tbl}" data-def="${J(def)}" title="Ajouter" aria-label="Ajouter dans ${esc(title)}">${ICON.plus}</button>` : ''}</div><div class="list">${it.map(x => `<div class="row person"><div class="avatar">${esc((x.n || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div><div class="grow ${x.act ? 'click' : ''}" ${x.act || ''}><div>${esc(x.n)}</div><div class="sub">${esc(x.s)}</div></div>${x.ph && /\d{6,}/.test(x.ph) ? `<a class="btn sm" href="${wa(x.ph)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${x.em ? `<a class="btn sm" href="mailto:${esc(x.em)}">E-mail</a>` : ''}</div>`).join('') || '<div class="empty-state">Personne</div>'}</div></div>`; }).join('')}</div>`;
 };
 
 /* Éditions */
@@ -605,8 +648,8 @@ V.edition = async id => {
   const s = edStats(id, D), e = s.ed; S.ctxEdition = id;
   const [journal, incidents] = await Promise.all([q(sb.from('edition_journal').select('*').eq('edition_id', id).order('happened_on', { ascending: false })), q(sb.from('incidents').select('*').eq('edition_id', id).order('occurred_on', { ascending: false }))]);
   const coach = S.cache.partners.find(p => p.id === e.coach_id);
-  setHead(`${e.skill} · ${e.id}`, `${fmtD(e.start_date)} → ${fmtD(e.end_date)}${coach ? ' · coach : ' + coach.name : ''} · ${e.status}`, `<a class="btn" href="#editions">← Éditions</a><button class="btn" type="button" data-act="edit" data-t="editions" data-id="${id}">Modifier</button>`);
-  const tabs = [['resume', 'Résumé'], ['participants', `Participants (${s.parts.length})`], ['entrees', `Entrées (${s.pays.length})`], ['depenses', `Dépenses (${s.exps.length})`], ['journal', `Journal (${journal.length})`], ['incidents', `Incidents (${incidents.length})`], ['budget', 'Budget prévu']];
+  setHead(`${e.skill} · ${fmtD(e.start_date)}`, `${fmtD(e.start_date)} → ${fmtD(e.end_date)}${coach ? ' · coach : ' + coach.name : ''} · ${e.status}`, `<button class="btn" type="button" data-act="edit" data-t="editions" data-id="${id}">Modifier l’édition</button>`, `<a href="#editions">Éditions</a> / ${esc(e.id)}`);
+  const tabs = [['resume', 'Résumé'], ['participants', `Participants (${s.parts.length})`], ['entrees', `Entrées (${s.pays.length})`], ['depenses', `Dépenses (${s.exps.length})`], ['journal', `Journal (${journal.length})`], ['incidents', `Incidents (${incidents.length})`], ['budget', 'Coûts fixes']];
   const pn = pid => D.parts.find(p => p.id === pid)?.full_name || '—';
   let body = '';
   if (edTab === 'resume') {
@@ -621,11 +664,8 @@ V.edition = async id => {
   if (edTab === 'depenses') body = `${quickBar(id)}${budgetVsReal(s, D)}<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn primary sm" type="button" data-act="add" data-t="expenses" data-def="expdef">+ Dépense détaillée</button></div>${expFeed(s.exps, D)}</div><div>${owesBox(D, id)}${envelope(s)}</div></div>`;
   if (edTab === 'journal') body = `<div class="card"><div class="head"><h2>Journal de l’édition</h2><button class="btn primary sm" type="button" data-act="add" data-t="edition_journal" data-def="jdef">+ Note</button></div><p class="muted">Remarques, problèmes, contenu filmé (avec le lien Drive), changements, retours des participants.</p>${journalFeed(journal)}</div>`;
   if (edTab === 'incidents') body = `<div class="card"><div class="head"><h2>Incidents</h2><button class="btn primary sm" type="button" data-act="add" data-t="incidents" data-def="${J({ edition_id: id, occurred_on: today(), status: 'Ouvert' })}">+ Incident</button></div><div class="list">${incidents.map(x => `<button type="button" class="row click" data-act="edit" data-t="incidents" data-id="${x.id}"><span class="stripe ${x.status === 'Clos' ? '' : 'bad'}"></span><div class="grow"><div><b>${esc(x.type)}</b> · ${fmtD(x.occurred_on)} ${pill(x.status, x.status === 'Clos' ? 'good' : 'warn')}</div><div class="sub">${esc(x.description)}</div>${x.decision ? `<div class="sub">Décision : ${esc(x.decision)}</div>` : ''}</div></button>`).join('') || '<div class="empty-state">Aucun incident</div>'}</div></div>`;
-  if (edTab === 'budget') {
-    const lines = D.budget.filter(b => b.edition_id === id).sort((a, b) => b.amount_eur - a.amount_eur), avg = s.active.length ? s.attendu / s.active.length : 2300;
-    body = `<div class="card"><div class="head"><h2>Budget prévisionnel</h2><button class="btn primary sm" type="button" data-act="add" data-t="edition_budget_lines" data-def="${J({ edition_id: id })}">+ Poste</button></div><table><tbody>${lines.map(l => `<tr class="click" data-act="edit" data-t="edition_budget_lines" data-id="${l.id}"><td>${esc(l.category)}</td><td class="n">${EUR(l.amount_eur)}</td></tr>`).join('') || '<tr><td class="muted">Budget à construire</td></tr>'}
-    ${s.budget ? `<tr class="sep"><td><b>Total prévu</b></td><td class="n"><b>${EUR(s.budget)}</b></td></tr><tr><td>Dépensé à ce jour</td><td class="n">${EUR(s.couts)} (${Math.round(s.couts / s.budget * 100)} %)</td></tr><tr><td>Seuil sans perte (prix moyen ${EUR(avg)})</td><td class="n">${Math.ceil(s.budget / avg)} participants</td></tr><tr><td>Gain chacun à 12 participants</td><td class="n">${EUR((12 * avg - s.budget) * (1 - s.pct) / 2)}</td></tr>` : ''}</tbody></table></div>`;
-  }
+  if (edTab === 'budget') body = budgetVsReal(s, D);
+
   return `<div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="tab" data-v="${k}" class="${edTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 };
 function payBars(parts) {
@@ -724,32 +764,70 @@ V.finances = async arg => {
     const cats = {}; (finEdition ? D.exps.filter(x => x.edition_id === finEdition) : D.exps).filter(x => x.type !== 'Frais fondateurs').forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
     body = `${quickBar(finEdition)}<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn sm" type="button" data-act="import">Importer un relevé (CSV)</button><select id="expCat" data-var="expCat"><option value="">Toutes catégories</option>${EXP_CATS.map(c => `<option ${c === expCat ? 'selected' : ''}>${c}</option>`).join('')}</select></div><p class="muted">Chaque dépense peut avoir une photo / facture, et être détaillée (ex. un retrait Bourso qui a servi à l’excursion et aux courses). Les petites courses du coin : catégorie « Petites dépenses », une ligne par semaine suffit.</p>${expFeed(exps, D)}</div><div>${owesBox(D, finEdition)}<div class="card"><div class="head"><h2>Par catégorie</h2></div>${catChart(cats)}</div></div></div>`;
   }
-  if (finTab === 'gain') body = all.filter(s => s.enc || s.couts).map(s => gainTable(s, `${esc(s.ed.skill)} · ${s.ed.id}`)).join('') + `<div class="card"><div class="head"><h2>Avances sur gain enregistrées</h2></div>${expFeed(D.exps.filter(x => x.type === 'Frais fondateurs' && (!finEdition || x.edition_id === finEdition)), D)}</div>`;
+  if (finTab === 'gain') {
+    const gid = finEdition || S.gainEd || currentEd() || D.eds.find(e => !e.hidden)?.id; S.gainEd = gid;
+    const st = edStats(gid, D), P = postes(gid, D);
+    const chips = D.eds.filter(e => !e.hidden).map(e => { const x = edStats(e.id, D); return `<button type="button" class="edchip ${e.id === gid ? 'on' : ''}" data-act="gained" data-id="${e.id}"><b>${esc(e.skill)}</b><small>${fmtD(e.start_date)}</small><span class="num">${EUR(x.prev.part)} chacun</span></button>`; }).join('');
+    const byCat = {}; st.costs.forEach(x => byCat[x.category] = (byCat[x.category] || 0) + N(x.amount_eur));
+    body = `<div class="edchips">${chips}</div>
+    <div class="grid g4">${kpi('Entrées de ce bootcamp', EUR(st.enc), `sur ${EUR(st.attendu)} attendus`)}${kpi('Dépenses de ce bootcamp', EUR(st.couts), P.has ? `prévision ${EUR(P.totPrev)}` : '')}${kpi('Résultat', EUR(st.now.res), `prévu ${EUR(st.prev.res)}`)}${kpi('Gain chacun', EUR(st.now.part), `prévu ${EUR(st.prev.part)}`, 'accent')}</div>
+    <div class="split"><div>${gainTable(st, `Gain de ${esc(st.ed.skill)} · ${fmtD(st.ed.start_date)}`)}</div>
+    <div class="card"><div class="head"><h2>D’où vient l’argent</h2><span class="num">${EUR(st.enc)}</span></div>${payBars(st.parts)}
+    <div class="head" style="margin-top:12px"><h2>Où il est parti</h2><span class="num">${EUR(st.couts)}</span></div>${catChart(byCat)}
+    <div class="head" style="margin-top:12px"><h2>Déjà pris par chacun</h2></div>${expFeed(st.adv, D)}</div></div>
+    <p class="muted">Seules les entrées et dépenses rattachées à ce bootcamp comptent. Les dépenses sans bootcamp (structure, URSSAF…) ne sont dans aucun gain : rattachez-les à une édition si elles doivent être partagées.</p>`;
+  }
+
   if (finTab === 'comptes') body = comptesHtml(D);
   if (finTab === 'clarifier') body = `<p class="muted">Chaque ligne s’ouvre : corrigez directement et elle disparaît de la liste. Les totaux se recalculent seuls.</p>${clarifyHtml(clar)}`;
   return `<div class="toolbar"><label for="finEd" class="muted">Édition</label><select id="finEd" data-var="finEdition">${edOpts(finEdition)}</select></div><div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="setvar" data-k="finTab" data-v="${k}" class="${finTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 };
 
 /* Alumni */
+let alTab = 'membres';
 V.alumni = async () => {
-  setHead('Alumni & parrainage', 'Les participants passent ici automatiquement à la fin de leur bootcamp, avec toutes leurs informations et leurs fichiers.');
+  setHead('Alumni & Circle Club', 'Les participants passent ici automatiquement à la fin de leur bootcamp. Le Circle Club les garde réunis, et le parrainage se suit tout seul.');
   const D = await loadData();
-  const leads = await load('leads');
+  const [leads, rewards, events] = await Promise.all([load('leads'), q(sb.from('referral_rewards').select('*').order('created_at', { ascending: false })), q(sb.from('club_events').select('*').order('event_on', { ascending: false, nullsFirst: false }))]);
   const al = D.parts.filter(p => !INACTIVE.includes(p.status) && isEnded(D.eds.find(e => e.id === p.edition_id)));
-  const refCount = code => code ? D.parts.filter(x => (x.referred_by || '').toUpperCase() === code).length + leads.filter(l => (l.referral_code_used || '').toUpperCase() === code).length : 0;
+  const link = S.settings.club_whatsapp_link || '';
+  const fR = N(S.settings.parrainage_filleul_eur) || 150, rR = N(S.settings.parrainage_parrain_eur) || 150, ret = S.settings.club_retour_pct || 15;
   const t = today();
-  const due = al.filter(p => !p.next_followup || p.next_followup <= t);
-  const f = S.settings.parrainage_filleul_eur || 150, r = S.settings.parrainage_parrain_eur || 150;
-  return `<div class="grid g4">${kpi('Alumni', al.length, `${new Set(al.map(p => p.edition_id)).size} bootcamps`)}${kpi('À recontacter', due.length, 'relance due ou jamais planifiée')}${kpi('Filleuls', sum(al, p => refCount(p.referral_code)), 'prospects et inscrits avec un code')}${kpi('Circle Club', al.filter(p => p.circle_club).length, `${al.filter(p => p.ambassador).length} ambassadeur(s)`)}</div>
-  <div class="split"><div class="card"><div class="head"><h2>Tous les alumni</h2></div><div class="table-wrap"><table><thead><tr><th>Nom</th><th>Bootcamp</th><th>Code</th><th class="n">Filleuls</th><th>Dernier contact</th><th>Relance</th><th></th></tr></thead><tbody>${al.sort((a, b) => (a.next_followup || '').localeCompare(b.next_followup || '')).map(p => `<tr class="click" data-act="part" data-id="${p.id}"><td><b>${esc(p.full_name)}</b>${p.ambassador ? ' ' + pill('Ambassadeur', 'good') : ''}${p.circle_club ? ' ' + pill('Club', 'mute') : ''}</td><td>${esc(p.edition_id)}</td><td><code>${esc(p.referral_code || '')}</code></td><td class="n">${refCount(p.referral_code)}</td><td>${fmtD(p.last_contact)}</td><td>${!p.next_followup ? pill('À planifier', 'warn') : p.next_followup <= t ? pill(fmtD(p.next_followup), 'bad') : fmtD(p.next_followup)}</td><td>${p.phone ? `<a class="btn sm" href="${wa(p.phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty-state">Aucun alumni</td></tr>'}</tbody></table></div></div>
-  <div class="card"><div class="head"><h2>Programme de continuité</h2><a class="more" href="#reglages">Modifier les montants</a></div>
-  <ol class="steps"><li><b>Code de parrainage personnel</b> créé automatiquement pour chaque participant (ex. CIRCLE-YANIS-457). Le filleul a <b>${f} €</b> de réduction, le parrain reçoit <b>${r} €</b> (ou une remise sur son prochain bootcamp) quand le filleul a payé.</li>
-  <li><b>Relances</b> : J+7 (avis + photos), J+30 (où en est ton projet ?), J+90 (prochaine édition), puis tous les 6 mois. Cochez « contacté » dans la fiche, la prochaine date se calcule toute seule (+90 jours).</li>
-  <li><b>Circle Club</b> : groupe WhatsApp privé des alumni, un live par mois avec un coach, des offres partenaires à Bali.</li>
-  <li><b>Retour</b> : −15 % sur un 2ᵉ bootcamp (autre compétence), priorité sur les places.</li>
-  <li><b>Ambassadeurs</b> : les 3 meilleurs parrains de l’année sont invités une semaine gratuite à la villa pendant une édition.</li>
-  <li><b>Réunion annuelle</b> en Tunisie : un dîner ou un événement par an pour garder le lien et faire venir des prospects.</li></ol>
-  <p class="muted">Pour qu’un parrainage compte : saisissez le code dans la fiche du prospect (« Code de parrainage utilisé ») ou dans la fiche participant (« Parrainé par »).</p></div></div>`;
+  const codeOf = p => (p.referral_code || '').toUpperCase();
+  // Parrainage : tous les parrains (alumni et participants actuels)
+  const refs = D.parts.filter(p => p.referral_code).map(p => {
+    const code = codeOf(p);
+    const inscrits = D.parts.filter(x => (x.referred_by || '').toUpperCase() === code).map(x => ({ x, b: partBal(x, D.pays), rw: rewards.find(r => r.referred_participant_id === x.id) }));
+    const prospects = leads.filter(l => (l.referral_code_used || '').toUpperCase() === code && l.status !== 'Payé');
+    const due = inscrits.filter(i => i.b.net > 0 && !i.rw).length;
+    const earned = sum(rewards.filter(r => r.referrer_id === p.id && r.status !== 'Annulé'), r => r.amount_eur);
+    return { p, inscrits, prospects, due, earned, score: inscrits.length * 3 + prospects.length };
+  }).filter(r => r.inscrits.length || r.prospects.length).sort((a, b) => b.score - a.score);
+  const inv = p => { const msg = `Salut ${p.full_name.split(' ')[0]} ! Bienvenue dans le Circle Club, la communauté des alumni The Circle${link ? ` : ${link}` : ''}. Ton code de parrainage : ${p.referral_code} (${fR} € offerts à chaque ami inscrit, ${rR} € pour toi).`; return p.phone ? `${wa(p.phone)}?text=${encodeURIComponent(msg)}` : ''; };
+  const members = al.filter(p => p.club_status === 'Membre' || p.circle_club).length, invited = al.filter(p => p.club_status === 'Invité').length;
+  const tabs = [['membres', `Alumni (${al.length})`], ['parrainage', `Parrainage (${refs.length})`], ['club', 'Circle Club'], ['events', `Événements (${events.length})`]];
+  let body = '';
+  if (alTab === 'membres') body = `<div class="card"><div class="table-wrap"><table><thead><tr><th>Alumni</th><th>Bootcamp</th><th>Circle Club</th><th>Code</th><th>Relance</th><th></th></tr></thead><tbody>${al.sort((a, b) => (a.next_followup || '').localeCompare(b.next_followup || '')).map(p => `<tr><td class="click" data-act="part" data-id="${p.id}"><div class="who"><div class="avatar">${esc(p.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div><div><b>${esc(p.full_name)}</b>${p.ambassador ? ' ' + pill('Ambassadeur', 'good') : ''}<div class="muted">${esc(p.project || p.profession || '')}</div></div></div></td><td>${esc(D.eds.find(e => e.id === p.edition_id)?.skill || '')} <span class="muted">${esc(p.edition_id)}</span></td><td>${pill(p.circle_club ? 'Membre' : p.club_status || 'Pas encore invité', p.circle_club || p.club_status === 'Membre' ? 'good' : p.club_status === 'Invité' ? 'warn' : 'mute')}</td><td><code>${esc(p.referral_code || '')}</code></td><td>${!p.next_followup ? pill('À planifier', 'warn') : p.next_followup <= t ? pill(fmtD(p.next_followup), 'bad') : fmtD(p.next_followup)}</td><td class="acts">${p.phone ? `<a class="btn sm" href="${inv(p)}" target="_blank" rel="noopener" data-act="invited" data-id="${p.id}">Inviter au club</a>` : ''}<button class="btn sm" type="button" data-act="contacted" data-id="${p.id}">Contacté</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty-state">Aucun alumni</td></tr>'}</tbody></table></div></div>`;
+  if (alTab === 'parrainage') body = `<div class="grid g4">${kpi('Parrains actifs', refs.length, 'au moins un filleul')}${kpi('Filleuls inscrits', sum(refs, r => r.inscrits.length), `${sum(refs, r => r.prospects.length)} prospects en cours`)}${kpi('Récompenses à valider', sum(refs, r => r.due), `${EUR(sum(refs, r => r.due) * rR)} à prévoir`)}${kpi('Déjà versé', EUR(sum(rewards.filter(r => r.status === 'Versé' || r.status === 'Déduit du prochain bootcamp'), r => r.amount_eur)), `${rewards.filter(r => r.status === 'À verser').length} en attente`)}</div>
+  <div class="card"><div class="head"><h2>Classement des parrains</h2></div>${refs.length ? `<div class="refs">${refs.map((r, i) => `<div class="ref"><div class="rank">${i + 1}</div><div class="grow"><div class="click" data-act="part" data-id="${r.p.id}"><b>${esc(r.p.full_name)}</b> <code>${esc(r.p.referral_code)}</code></div>
+    <div class="fil">${r.inscrits.map(i => `<span class="filleul">${esc(i.x.full_name)} ${i.rw ? pill(i.rw.status, i.rw.status === 'Versé' ? 'good' : 'warn') : i.b.net > 0 ? `<button class="btn sm primary" type="button" data-act="reward" data-ref="${r.p.id}" data-fil="${i.x.id}" data-name="${esc(i.x.full_name)}">Valider ${EUR(rR)}</button>` : pill('pas encore payé', 'mute')}</span>`).join('')}${r.prospects.map(l => `<span class="filleul">${esc(l.full_name)} ${pill('prospect · ' + l.status, 'mute')}</span>`).join('')}</div></div><div class="pv"><small>Gagné</small><b class="num">${EUR(r.earned)}</b></div></div>`).join('')}</div>` : `<div class="empty-state">Aucun parrainage pour l’instant. Dès qu’un prospect ou un participant a un code dans sa fiche (« Code de parrainage utilisé » / « Parrainé par »), il apparaît ici.</div>`}</div>
+  <div class="card"><div class="head"><h2>Récompenses</h2><button class="btn sm" type="button" data-act="add" data-t="referral_rewards" data-def="${J({ amount_eur: rR, status: 'À verser' })}">+ Ajouter</button></div><div class="list">${rewards.map(w => `<button type="button" class="row click" data-act="edit" data-t="referral_rewards" data-id="${w.id}"><div class="grow"><b>${esc(D.parts.find(p => p.id === w.referrer_id)?.full_name || '')}</b> pour ${esc(w.referred_name || D.parts.find(p => p.id === w.referred_participant_id)?.full_name || '')}<div class="sub">${w.paid_on ? 'versé le ' + fmtD(w.paid_on) : ''}</div></div>${pill(w.status, w.status === 'Versé' ? 'good' : w.status === 'Annulé' ? 'mute' : 'warn')}<b class="num">${EUR(w.amount_eur)}</b></button>`).join('') || '<div class="empty-state">Aucune récompense</div>'}</div><p class="muted">Quand vous passez une récompense à « Versé », une dépense « Parrainage » est créée dans le bootcamp du filleul : elle entre dans le calcul du gain.</p></div>`;
+  if (alTab === 'club') body = `<div class="grid g4">${kpi('Membres du club', members, `sur ${al.length} alumni`)}${kpi('Invités', invited, 'pas encore entrés')}${kpi('Événements', events.length, events[0] ? 'dernier : ' + fmtD(events[0].event_on) : 'aucun')}${kpi('Lien du groupe', link ? 'OK' : 'à créer', link ? 'dans Réglages' : 'collez-le dans Réglages')}</div>
+  <div class="split"><div class="card club"><div class="head"><h2>Le Circle Club : ce qu’on vous recommande</h2></div>
+  <p><b>Une communauté WhatsApp</b> « The Circle Alumni » plutôt qu’une nouvelle appli : tous vos participants sont déjà sur WhatsApp, c’est gratuit, et une communauté regroupe plusieurs groupes sous un même toit.</p>
+  <div class="clubgrid"><div><b>📣 Annonces</b><small>Seuls Youssef et Nahed écrivent : nouvelles éditions, événements, offres. Tout le monde y est.</small></div><div><b>🛒 E-commerce</b><small>Alumni e-com : questions, fournisseurs, résultats.</small></div><div><b>📈 Trading</b><small>Alumni trading : analyses, challenges, prop firms.</small></div><div><b>🤝 Opportunités</b><small>Jobs, missions freelance, associés, services entre alumni.</small></div><div><b>🌴 Bali & voyages</b><small>Ceux qui reviennent à Bali, colocs, bons plans.</small></div><div><b>🇹🇳 Meetups Tunisie</b><small>Afterworks et réunion annuelle à Tunis.</small></div></div>
+  <h3>Ce que les membres y gagnent</h3><ul class="steps"><li>Un <b>live par mois</b> avec un coach ou un alumni qui a réussi (30 min + questions).</li><li><b>−${ret} %</b> sur un 2ᵉ bootcamp et priorité sur les places.</li><li>Leur <b>code de parrainage</b> : ${fR} € offerts à leurs amis, ${rR} € pour eux par inscrit.</li><li>Un <b>annuaire des alumni</b> (nom, projet, Instagram) partagé dans le groupe chaque trimestre, pour se contacter entre eux.</li><li>Une <b>réunion annuelle</b> à Tunis et un afterwork à Bali pendant chaque édition (les alumni sur place rencontrent les nouveaux).</li><li>Les <b>3 meilleurs parrains</b> de l’année : une semaine offerte à la villa.</li></ul>
+  <h3>Comment le lancer (30 minutes)</h3><ol class="steps"><li>WhatsApp → Communautés → Nouvelle communauté « The Circle Alumni », créez les groupes ci-dessus.</li><li>Copiez le lien d’invitation et collez-le dans <a href="#reglages">Réglages</a>.</li><li>Onglet « Alumni » : bouton « Inviter au club » sur chaque personne. Le message part avec le lien et son code de parrainage.</li><li>Programmez les lives dans l’onglet « Événements ».</li></ol></div>
+  <div class="card"><div class="head"><h2>Rituels automatiques</h2></div><ul class="steps"><li><b>Fin du bootcamp</b> : la personne passe alumni, reçoit son code et l’invitation au club.</li><li><b>J+7</b> : demander un avis et des photos/vidéos.</li><li><b>J+30</b> : « où en est ton projet ? » (notez la réponse dans sa fiche, champ Projet).</li><li><b>J+90</b> puis tous les 3 mois : nouvelles éditions + rappel du code. Le bouton « Contacté » planifie la relance suivante.</li></ul>
+  <a class="btn primary" href="#alumni" data-act="altab" data-v="membres">Voir qui inviter</a></div></div>`;
+  if (alTab === 'events') body = `<div class="card"><div class="head"><h2>Événements du Circle Club</h2><button class="btn sm primary" type="button" data-act="add" data-t="club_events" data-def="${J({ kind: 'Live en ligne', event_on: today() })}">+ Événement</button></div><div class="feed">${events.map(ev => `<button type="button" class="feed-item click" data-act="edit" data-t="club_events" data-id="${ev.id}"><div class="fi-date">${ev.event_on ? new Date(ev.event_on + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}</div><div class="grow"><div>${pill(ev.kind, ev.event_on && ev.event_on >= t ? 'good' : 'mute')} <b>${esc(ev.title)}</b></div><div class="sub">${esc([ev.place, ev.link].filter(Boolean).join(' · '))}${ev.attendees ? ` · ${ev.attendees} participants` : ''}</div></div></button>`).join('') || '<div class="empty-state">Aucun événement. Commencez par un live « Mon business 3 mois après Bali » avec un alumni.</div>'}</div></div>`;
+  return `<div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="altab" data-v="${k}" class="${alTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
+};
+SCHEMAS.referral_rewards.afterSave = async (rec, old) => {
+  if (rec.status === 'Versé' && (!old || old.status !== 'Versé')) {
+    const fil = S.cache.participants.find(p => p.id === rec.referred_participant_id), par = S.cache.participants.find(p => p.id === rec.referrer_id);
+    await q(sb.from('expenses').insert({ edition_id: fil?.edition_id || null, spent_on: rec.paid_on || today(), description: `Parrainage : ${par?.full_name || ''} pour ${fil?.full_name || rec.referred_name || ''}`, category: 'Parrainage', amount: rec.amount_eur, currency: 'EUR', fx_rate: 1, type: 'Marketing', paid_by: 'Caisse Circle', notes: 'Créée automatiquement à partir de la récompense de parrainage' }));
+  }
 };
 
 /* Listes simples */
@@ -787,10 +865,12 @@ async function route() {
   const [k, arg] = (location.hash || '#accueil').slice(1).split('/');
   const view = V[k] ? k : 'accueil', navKey = view === 'edition' ? 'editions' : view;
   if (view !== 'edition') edTab = edTab;
-  $('nav').innerHTML = VIEWS.map(([key, l]) => `<a href="#${key}" class="${key === navKey ? 'on' : ''}"><span class="dot"></span>${l}</a>`).join('');
+  $('nav').innerHTML = NAV.map(([g, items]) => `${g ? `<div class="ngroup">${g}</div>` : ''}${items.map(([key, l]) => `<a href="#${key}" class="${key === navKey ? 'on' : ''}">${ICON[key] || ''}<span>${l}</span></a>`).join('')}`).join('');
+  document.querySelectorAll('.bottombar a').forEach(a => a.classList.toggle('on', a.dataset.k === navKey));
   $('side').classList.remove('open'); $('fabMenu').classList.remove('on');
   if (view !== 'edition' && view !== 'finances') S.ctxEdition = null;
-  try { $('view').innerHTML = await V[view](arg ? decodeURIComponent(arg) : undefined); } catch (e) { console.error(e); $('view').innerHTML = `<div class="msg err">Impossible de charger cette page : ${esc(e.message)}</div>`; }
+  const v = $('view'); if (!v.dataset.k || v.dataset.k !== location.hash.split('/')[0]) v.innerHTML = skeleton(); v.dataset.k = location.hash.split('/')[0];
+  try { const html = await V[view](arg ? decodeURIComponent(arg) : undefined); v.innerHTML = html; v.classList.remove('fade'); void v.offsetWidth; v.classList.add('fade'); } catch (e) { console.error(e); $('view').innerHTML = `<div class="msg err">Impossible de charger cette page : ${esc(e.message)}</div>`; }
 }
 function backFn(back) {
   if (!back) return null;
@@ -810,7 +890,7 @@ document.addEventListener('click', async e => {
     case 'close': closeDrawer(); break;
     case 'logout': await sb.auth.signOut(); location.hash = ''; location.reload(); break;
     case 'menu': $('side').classList.toggle('open'); break;
-    case 'fab': $('fabMenu').classList.toggle('on'); break;
+    case 'fab': $('fabMenu').classList.toggle('on'); document.querySelector('.fab-wrap').classList.toggle('on', $('fabMenu').classList.contains('on')); break;
     case 'add': { $('fabMenu').classList.remove('on'); const def = d.def && d.def.startsWith('{') ? JSON.parse(d.def) : defaultsFor(d.def); editRow(d.t, null, def, after); break; }
     case 'edit': if (!e.target.closest('input')) editById(d.t, d.id, after || (d.t === 'editions' ? async () => { await ensureLookups(true); route(); } : null)); break;
     case 'part': participantDetail(d.id); break;
@@ -822,6 +902,14 @@ document.addEventListener('click', async e => {
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
     case 'qsave': quickSave(); break;
+    case 'togglepaid': await q(sb.from('edition_budget_lines').update({ paid: d.v === '1', paid_on: d.v === '1' ? today() : null }).eq('id', d.id)); toast(d.v === '1' ? 'Poste marqué payé' : 'Poste remis à payer'); route(); break;
+    case 'gained': S.gainEd = d.id; finEdition = ''; route(); break;
+    case 'altab': e.preventDefault(); alTab = d.v; route(); break;
+    case 'invited': await q(sb.from('participants').update({ club_status: 'Invité', last_contact: today() }).eq('id', d.id)); delete S.cache.participants; setTimeout(route, 300); break;
+    case 'reward': await q(sb.from('referral_rewards').insert({ referrer_id: d.ref, referred_participant_id: d.fil, referred_name: d.name, amount_eur: N(S.settings.parrainage_parrain_eur) || 150, status: 'À verser' })); toast('Récompense validée : à verser'); route(); break;
+    case 'theme': { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); const nx = cur === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = nx; try { localStorage.setItem('circle-theme', nx); } catch (_) { } t.innerHTML = nx === 'light' ? ICON.moon : ICON.sun; break; }
+    case 'palette': openPalette(); break;
+    case 'palgo': runPal(Number(d.i)); break;
     case 'photo': $('photoIn').click(); break;
     case 'import': await ensureLookups(); importDrawer(); break;
     case 'impgo': importGo(); break;
@@ -859,6 +947,45 @@ document.addEventListener('dragover', e => { const c = e.target.closest('.col');
 document.addEventListener('dragleave', e => { const c = e.target.closest('.col'); if (c) c.classList.remove('over'); });
 document.addEventListener('drop', async e => { const c = e.target.closest('.col'); if (!c) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); await q(sb.from('leads').update({ status: c.dataset.status }).eq('id', id)); toast('Statut mis à jour : ' + c.dataset.status); route(); });
 document.addEventListener('keydown', e => { if (e.target.id === 'qIn' && e.key === 'Enter') { e.preventDefault(); quickSave(); return; } if (e.key === 'Escape') { closeDrawer(); $('fabMenu')?.classList.remove('on'); } });
+
+/* ---------- Recherche globale (Ctrl K) ---------- */
+let PAL = [], palSel = 0;
+const norm = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+async function openPalette() {
+  await ensureLookups(); if (!S.cache.leads) await load('leads');
+  $('pal').hidden = false; const i = $('palIn'); i.value = ''; i.focus(); palRender('');
+}
+function closePalette() { $('pal').hidden = true; }
+function palItems() {
+  const it = [];
+  NAV.forEach(([, items]) => items.forEach(([k, l]) => it.push({ g: 'Pages', t: l, s: '', ic: ICON[k], go: '#' + k })));
+  [['Ajouter une personne (formulaire, pub)', 'leads', { status: 'Nouveau', source: 'Formulaire' }], ['Ajouter un participant', 'participants', { status: 'Confirmé', pay_currency: 'TND' }], ['Ajouter un encaissement', 'payments', 'paydef'], ['Ajouter une dépense', 'expenses', 'expdef'], ['Retrait, change ou virement', 'transfers', 'trdef'], ['Note d’édition', 'edition_journal', 'jdef'], ['Nouvelle tâche', 'tasks', { owner: 'Les deux' }]].forEach(([t, tb, def]) => it.push({ g: 'Actions', t, s: '', ic: ICON.plus, add: [tb, def] }));
+  S.cache.editions.filter(e => !e.hidden).forEach(e => it.push({ g: 'Éditions', t: `${e.skill} · ${fmtD(e.start_date)}`, s: e.id, ic: ICON.editions, go: '#edition/' + e.id }));
+  S.cache.participants.forEach(p => it.push({ g: 'Participants & alumni', t: p.full_name, s: `${p.edition_id}${p.phone ? ' · ' + p.phone : ''}`, ic: ICON.participants, part: p.id, k: `${p.email || ''} ${p.referral_code || ''}` }));
+  (S.cache.leads || []).forEach(l => it.push({ g: 'Prospects', t: l.full_name, s: `${l.status}${l.phone ? ' · ' + l.phone : ''}`, ic: ICON.crm, edit: ['leads', l.id], k: l.email }));
+  S.cache.partners.filter(p => p.status !== 'Retiré').forEach(p => it.push({ g: 'Partenaires', t: p.name, s: p.type, ic: ICON.partenaires, edit: ['partners', p.id] }));
+  return it;
+}
+function palRender(qv) {
+  const qn = norm(qv); const all = palItems();
+  PAL = (qn ? all.filter(x => norm(`${x.t} ${x.s} ${x.k || ''}`).includes(qn)) : all.filter(x => x.g !== 'Participants & alumni' && x.g !== 'Prospects' && x.g !== 'Partenaires')).slice(0, 40); palSel = 0;
+  let g = ''; $('palList').innerHTML = PAL.map((x, i) => `${x.g !== g ? `<div class="pal-g">${(g = x.g)}</div>` : ''}<button type="button" class="pal-it ${i === 0 ? 'on' : ''}" data-act="palgo" data-i="${i}">${x.ic || ''}<span class="grow">${esc(x.t)}</span><small>${esc(x.s)}</small></button>`).join('') || '<div class="empty-state">Aucun résultat</div>';
+}
+function runPal(i) {
+  const x = PAL[i]; if (!x) return; closePalette();
+  if (x.go) location.hash = x.go; else if (x.part) participantDetail(x.part); else if (x.edit) editById(x.edit[0], x.edit[1]); else if (x.add) editRow(x.add[0], null, typeof x.add[1] === 'string' ? defaultsFor(x.add[1]) : x.add[1]);
+}
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { if (S.member) { e.preventDefault(); openPalette(); } return; }
+  if ($('pal') && !$('pal').hidden) {
+    if (e.key === 'Escape') { closePalette(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, Math.min(PAL.length - 1, palSel + (e.key === 'ArrowDown' ? 1 : -1))); document.querySelectorAll('.pal-it').forEach((b, i) => b.classList.toggle('on', i === palSel)); document.querySelector('.pal-it.on')?.scrollIntoView({ block: 'nearest' }); }
+    if (e.key === 'Enter') { e.preventDefault(); runPal(palSel); }
+  }
+});
+document.addEventListener('input', e => { if (e.target.id === 'palIn') palRender(e.target.value); });
+document.addEventListener('mousedown', e => { if (e.target.id === 'pal') closePalette(); });
+try { const th = localStorage.getItem('circle-theme'); if (th) document.documentElement.dataset.theme = th; } catch (_) { }
 
 /* ---------- Connexion ---------- */
 function loginView(msg = '', err = false) {
