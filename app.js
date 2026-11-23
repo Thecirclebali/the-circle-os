@@ -14,6 +14,10 @@ const today = () => new Date().toISOString().slice(0, 10);
 const daysTo = s => Math.round((new Date(s + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
 const sum = (arr, f) => arr.reduce((s, x) => s + N(f(x)), 0);
 const fx = () => N(S.settings.fx_tnd) || C.fxTnd || 3.55;
+const rate = cur => cur === 'TND' ? fx() : cur === 'IDR' ? (N(S.settings.fx_idr) || 20150) : 1;
+const toEur = (amt, cur) => N(amt) / rate(cur || 'EUR');
+const IDR = n => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(n)) + ' Rp';
+const money = (n, cur) => cur === 'EUR' || !cur ? EUR(n) : cur === 'IDR' ? IDR(n) : NUM(Math.round(n)) + ' ' + cur;
 const J = o => esc(JSON.stringify(o));
 function toast(t, err) { const el = $('toast'); el.textContent = t; el.style.background = err ? 'var(--bad)' : ''; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); }
 function openDrawer(html) { const d = $('drawer'); d.innerHTML = html; d.classList.add('on'); $('scrim').classList.add('on'); d.scrollTop = 0; }
@@ -33,7 +37,7 @@ const SOURCES = [['Formulaire', 'Formulaire pub (ads)'], ['Pub Meta', 'Pub Meta 
 const LEAD_STATUSES = ['Nouveau', 'Qualifié', 'Appel planifié', 'Offre envoyée', 'Tranche 1', 'Payé', 'Perdu'];
 const OWNERS = ['Youssef', 'Nahed', 'Les deux'];
 const CURR = ['EUR', 'TND', 'IDR'];
-const EXP_CATS = ['Villa', 'Coach', 'Excursions', 'Dîners', 'Courses maison', 'Petites dépenses', 'Surf & activités', 'Transport', 'Matériel & cadeaux', 'Publicité', 'Contenu & sponsoring', 'Visas', 'Banque & outils', 'Charges sociales', 'Assurance', 'Retrait espèces', 'Gain fondateurs', 'À clarifier'];
+const EXP_CATS = ['Villa', 'Coach', 'Excursions', 'Dîners', 'Courses maison', 'Petites dépenses', 'Surf & activités', 'Transport', 'Matériel & cadeaux', 'Publicité', 'Contenu & sponsoring', 'Visas', 'Banque & outils', 'Charges sociales', 'Assurance', 'Frais de change', 'Événements & meetups', 'Outils formation', 'Gain fondateurs', 'À clarifier'];
 const EXP_TYPES = [['Coût édition', 'Coût de l’édition'], ['Marketing', 'Marketing'], ['Structure', 'Structure (banque, charges…)'], ['Frais fondateurs', 'Avance sur gain d’un fondateur'], ['À clarifier', 'À clarifier']];
 const typeLabel = t => (EXP_TYPES.find(x => x[0] === t) || [t, t])[1];
 const DOC_TYPES = ['Contrat', 'CGV', 'Code de conduite', 'Règlement villa', 'Décharge', 'Droit image', 'Passeport', 'Visa', 'Assurance', 'Billets', 'Contact urgence', 'Fiche médicale'];
@@ -56,6 +60,8 @@ const SCHEMAS = {
   tasks: { title: 'Tâche', fields: [['title', 'Tâche', 'text', 1], ['due_date', 'Échéance', 'date'], ['owner', 'Responsable', 'select', 0, OWNERS], ['edition_id', 'Bootcamp', 'edition'], ['done', 'Faite', 'bool'], ['notes', 'Notes', 'textarea']] },
   decisions: { title: 'Décision', fields: [['decided_on', 'Date', 'date', 1], ['subject', 'Sujet', 'text', 1], ['decision', 'Décision', 'textarea', 1], ['ref', 'Référence', 'text']] },
   edition_budget_lines: { title: 'Ligne de budget', fields: [['edition_id', 'Bootcamp', 'edition', 1], ['category', 'Poste', 'text', 1], ['amount_eur', 'Montant (€)', 'number', 1]] },
+  transfers: { title: 'Retrait, change ou virement', fields: [['kind', 'Type', 'select', 1, ['Retrait espèces', 'Change de devises', 'Virement interne', 'Dépôt espèces']], ['done_on', 'Date', 'date'], ['edition_id', 'Bootcamp', 'edition'], ['from_account', 'Sorti de', 'account'], ['from_amount', 'Montant sorti', 'number'], ['from_currency', 'Devise sortie', 'select', 1, CURR], ['to_account', 'Arrivé sur', 'account'], ['to_amount', 'Montant arrivé', 'number'], ['to_currency', 'Devise arrivée', 'select', 1, CURR], ['file', 'Reçu / capture', 'file', 0, 'file_path'], ['notes', 'Notes', 'textarea']] },
+  cash_counts: { title: 'Comptage de caisse', fields: [['account', 'Caisse', 'account', 1], ['counted_on', 'Date', 'date', 1], ['amount', 'Montant compté (dans la devise de la caisse)', 'number', 1], ['notes', 'Notes', 'text']] },
   accounts: { title: 'Compte', key: 'name', fields: [['name', 'Nom du compte', 'text', 1], ['holder', 'Titulaire', 'text'], ['currency', 'Devise', 'text'], ['notes', 'Notes', 'textarea'], ['sort', 'Ordre', 'number']] }
 };
 
@@ -104,7 +110,8 @@ async function editRow(table, row = null, defaults = {}, after = null) {
   <div class="row-actions">${isNew ? '' : '<button class="btn danger" type="button" id="del">Supprimer</button>'}<button class="btn primary" type="submit">Enregistrer</button></div></form>${extra}`);
   const form = $('gform');
   const cur = form.querySelector('[name=currency]'), fxr = form.querySelector('[name=fx_rate]');
-  if (cur && fxr) cur.addEventListener('change', () => { fxr.value = cur.value === 'TND' ? fx() : cur.value === 'EUR' ? 1 : fxr.value; });
+  if (cur && fxr) cur.addEventListener('change', () => { fxr.value = rate(cur.value); });
+  ['from', 'to'].forEach(side => { const a = form.querySelector(`[name=${side}_account]`), c = form.querySelector(`[name=${side}_currency]`); if (a && c) a.addEventListener('change', () => { const acc = S.cache.accounts.find(x => x.name === a.value); if (acc && CURR.includes(acc.currency)) c.value = acc.currency; }); });
   const done = () => { delete S.cache[table]; closeDrawer(); toast('Enregistré'); (after || route)(); };
   form.onsubmit = async ev => {
     ev.preventDefault();
@@ -154,11 +161,12 @@ SCHEMAS.leads.extra = async row => `<div class="sub-section"><h3>Inscription</h3
 /* ---------- Données & calculs financiers ---------- */
 async function loadData() {
   await ensureLookups();
-  const [parts, pays, exps, lines, budget] = await Promise.all([
+  const [parts, pays, exps, lines, budget, transfers, counts] = await Promise.all([
     load('participants', 'full_name', true), load('payments', 'paid_on'), load('expenses', 'spent_on'),
-    q(sb.from('expense_lines').select('*')), q(sb.from('edition_budget_lines').select('*'))
+    q(sb.from('expense_lines').select('*')), q(sb.from('edition_budget_lines').select('*')),
+    q(sb.from('transfers').select('*').order('done_on', { ascending: false, nullsFirst: false })), q(sb.from('cash_counts').select('*').order('counted_on', { ascending: false }))
   ]);
-  return { eds: S.cache.editions, parts, pays, exps, lines, budget };
+  return { eds: S.cache.editions, parts, pays, exps, lines, budget, transfers, counts };
 }
 const INACTIVE = ['Exclu', 'Annulé'];
 function partBal(p, pays) {
@@ -186,18 +194,44 @@ function edStats(id, D) {
   const budget = sum(D.budget.filter(b => b.edition_id === id), b => b.amount_eur);
   const pct = (N(S.settings.investissement_pct) || 0) / 100;
   const split = res => { const invest = res > 0 ? res * pct : 0, gain = res > 0 ? res - invest : res; return { res, invest, gain, part: gain / 2, resteY: gain / 2 - avY - avX / 2, resteN: gain / 2 - avN - avX / 2 }; };
-  const now = split(enc - couts);
+  const tr = (D.transfers || []).filter(t => t.edition_id === id && t.from_amount != null && t.to_amount != null);
+  const fraisChange = sum(tr, t => toEur(t.from_amount, t.from_currency) - toEur(t.to_amount, t.to_currency));
+  const now = split(enc - couts - fraisChange);
   const coutsPrev = Math.max(couts, budget);
-  const prev = split(enc + reste - coutsPrev);
-  return { ed, parts, active, reported, avoirs, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
+  const prev = split(enc + reste - coutsPrev - fraisChange);
+  return { ed, parts, active, reported, avoirs, fraisChange, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
 }
-function accountBalances(D, edId) {
-  const pays = edId ? D.pays.filter(x => x.edition_id === edId) : D.pays, exps = edId ? D.exps.filter(x => x.edition_id === edId) : D.exps;
+/* Soldes par compte, dans la devise du compte (encaissements, dépenses, transferts) */
+function accountBalances(D, upto = null) {
   const acc = {};
-  const get = n => acc[n || 'Non renseigné'] ||= { name: n || 'Non renseigné', in: 0, out: 0 };
-  pays.forEach(x => { const a = get(x.account); if (N(x.eur_final) >= 0) a.in += N(x.eur_final); else a.out -= N(x.eur_final); });
-  exps.forEach(x => { get(x.paid_from).out += N(x.amount_eur); });
-  return Object.values(acc).sort((a, b) => (b.in - b.out) - (a.in - a.out));
+  const ok = d => !upto || !d || d <= upto;
+  const get = n => { const name = n || 'Non renseigné'; if (!acc[name]) { const a = S.cache.accounts.find(x => x.name === name); acc[name] = { name, cur: a?.currency && CURR.includes(a.currency) ? a.currency : 'EUR', holder: a?.holder || '', in: 0, out: 0, inEur: 0, outEur: 0 }; } return acc[name]; };
+  const conv = (amt, from, to) => toEur(amt, from) * rate(to);
+  D.pays.filter(x => ok(x.paid_on)).forEach(x => { const a = get(x.account); const eur = N(x.eur_final); const nat = x.currency === a.cur ? N(x.amount) * Math.sign(eur || 1) : a.cur === 'EUR' ? eur : eur * rate(a.cur); if (eur >= 0) { a.in += nat; a.inEur += eur; } else { a.out -= nat; a.outEur -= eur; } });
+  D.exps.filter(x => ok(x.spent_on)).forEach(x => { const a = get(x.paid_from); a.out += x.currency === a.cur ? N(x.amount) : conv(x.amount, x.currency, a.cur); a.outEur += N(x.amount_eur); });
+  (D.transfers || []).filter(t => ok(t.done_on)).forEach(t => {
+    if (t.from_account && t.from_amount != null) { const a = get(t.from_account); a.out += t.from_currency === a.cur ? N(t.from_amount) : conv(t.from_amount, t.from_currency, a.cur); a.outEur += toEur(t.from_amount, t.from_currency); }
+    if (t.to_account && t.to_amount != null) { const a = get(t.to_account); a.in += t.to_currency === a.cur ? N(t.to_amount) : conv(t.to_amount, t.to_currency, a.cur); a.inEur += toEur(t.to_amount, t.to_currency); }
+  });
+  Object.values(acc).forEach(a => { a.bal = a.in - a.out; a.balEur = toEur(a.bal, a.cur); });
+  return Object.values(acc).sort((a, b) => b.balEur - a.balEur);
+}
+const ZONE = a => a.cur === 'TND' ? 'tn' : a.cur === 'IDR' ? 'bali' : 'eu';
+const isCash = name => /esp[eè]ces|caisse/i.test(name || '');
+function cashStatus(D) {
+  return S.cache.accounts.filter(a => isCash(a.name)).map(a => {
+    const c = (D.counts || []).find(x => x.account === a.name);
+    const cur = CURR.includes(a.currency) ? a.currency : 'EUR';
+    const now = accountBalances(D).find(x => x.name === a.name)?.bal || 0;
+    let ecart = null, expectedAt = null;
+    if (c) { expectedAt = accountBalances(D, c.counted_on).find(x => x.name === a.name)?.bal || 0; ecart = N(c.amount) - expectedAt; }
+    return { a, cur, now, c, expectedAt, ecart };
+  });
+}
+function whoOwes(D, edId) {
+  const ex = (edId ? D.exps.filter(x => x.edition_id === edId) : D.exps).filter(x => x.paid_by && x.paid_by !== 'Caisse Circle' && !x.reimbursed);
+  const by = {}; ex.forEach(x => { (by[x.paid_by] ||= { who: x.paid_by, total: 0, n: 0 }); by[x.paid_by].total += N(x.amount_eur); by[x.paid_by].n++; });
+  return Object.values(by);
 }
 function clarify(D, edId) {
   const pays = edId ? D.pays.filter(x => x.edition_id === edId) : D.pays, exps = edId ? D.exps.filter(x => x.edition_id === edId) : D.exps;
@@ -216,7 +250,11 @@ function clarify(D, edId) {
   add('Dépenses sans justificatif', 'Ajoutez une photo ou une facture.', exps.filter(x => !x.receipt_path && x.type !== 'Frais fondateurs').map(x => ({ label: `${x.description || x.category} · ${fmtD(x.spent_on)}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'mute');
   add('Avancé de sa poche, pas encore remboursé', 'La caisse The Circle doit cet argent à la personne.', exps.filter(x => x.paid_by && x.paid_by !== 'Caisse Circle' && !x.reimbursed).map(x => ({ label: `${x.paid_by} · ${x.description || x.category}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })));
   add('Avances sur gain sans fondateur', 'Indiquez si c’est Youssef ou Nahed (sinon partagé 50/50).', exps.filter(x => x.type === 'Frais fondateurs' && !x.founder).map(x => ({ label: x.description || 'Sans description', amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })));
+  const trs = (D.transfers || []).filter(t => !edId || t.edition_id === edId);
+  add('Retraits et changes incomplets', 'Il manque le montant sorti ou le montant arrivé : sans les deux, la perte de change ne peut pas être calculée.', trs.filter(t => t.from_amount == null || t.to_amount == null).map(t => ({ label: `${t.kind} · ${t.from_account || '?'} → ${t.to_account || '?'} · ${fmtD(t.done_on)}`, amount: t.from_amount != null ? toEur(t.from_amount, t.from_currency) : toEur(t.to_amount, t.to_currency), act: `data-act="edit" data-t="transfers" data-id="${t.id}"` })), 'bad');
+  if (!edId) add('Écarts de caisse', 'Différence entre l’argent compté et ce que l’app attendait à cette date. Un écart = une dépense oubliée (ou un comptage faux).', cashStatus(D).filter(c => c.ecart != null && Math.abs(toEur(c.ecart, c.cur)) > 2).map(c => ({ label: `${c.a.name} · compté ${money(c.c.amount, c.cur)} le ${fmtD(c.c.counted_on)} · attendu ${money(c.expectedAt, c.cur)}`, amount: toEur(c.ecart, c.cur), act: `data-act="go" data-href="#finances" ` })), 'bad');
   add('Dépenses sans date', 'Ajoutez la date, même approximative.', exps.filter(x => !x.spent_on).map(x => ({ label: x.description || x.category, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'mute');
+  add('Été 2026 : édition à vérifier', 'Dépenses importées du Drive, réparties entre l’E-com et le Trading de l’été par date. Changez le bootcamp si besoin, puis effacez la phrase « à vérifier » des notes.', exps.filter(x => /à vérifier/i.test(x.notes || '')).map(x => ({ label: `${x.description} · ${x.edition_id}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'mute');
   return groups;
 }
 function clarifyHtml(groups) {
@@ -230,6 +268,7 @@ function gainTable(st, title = 'Calcul du gain') {
   return `<div class="card"><div class="head"><h2>${title}</h2><span class="muted">Investissement gardé : ${pc} % (modifiable dans Réglages)</span></div><div class="table-wrap"><table class="gain"><thead><tr><th></th><th class="n">Aujourd’hui</th><th class="n">Si tout est payé</th></tr></thead><tbody>
   ${row('Argent encaissé (réel, après remboursements)', EUR(st.enc), EUR(st.enc + st.reste))}
   ${row('Dépenses' + (st.budget > st.couts ? ' <span class="muted">(prévision = budget prévu)</span>' : ''), '− ' + EUR(st.couts), '− ' + EUR(st.coutsPrev))}
+  ${st.fraisChange ? row('Pertes de change et retraits <span class="muted">(calculées depuis les transferts)</span>', '− ' + EUR(st.fraisChange), '− ' + EUR(st.fraisChange)) : ''}
   ${row('<b>Résultat</b>', `<b>${EUR(g.res)}</b>`, `<b>${EUR(p.res)}</b>`, 'sep')}
   ${row(`Investissement gardé (${pc} %)`, '− ' + EUR(g.invest), '− ' + EUR(p.invest))}
   ${row('<b>Gain à partager</b>', `<b>${EUR(g.gain)}</b>`, `<b>${EUR(p.gain)}</b>`, 'sep')}
@@ -255,9 +294,11 @@ function shell() {
     <button type="button" data-act="add" data-t="participants" data-def="${J({ status: 'Confirmé', pay_currency: 'TND' })}">Nouveau participant</button>
     <button type="button" data-act="add" data-t="payments" data-def="paydef">Encaissement</button>
     <button type="button" data-act="add" data-t="expenses" data-def="expdef">Dépense</button>
+    <button type="button" data-act="photo">Photo d’un ticket (dépense à compléter)</button>
+    <button type="button" data-act="add" data-t="transfers" data-def="trdef">Retrait, change ou virement</button>
     <button type="button" data-act="add" data-t="edition_journal" data-def="jdef">Note d’édition (remarque, problème, contenu)</button>
     <button type="button" data-act="add" data-t="tasks" data-def="${J({ owner: 'Les deux' })}">Tâche</button>
-  </div><button class="fab" type="button" data-act="fab" aria-label="Ajouter">+</button></div>`;
+  </div><button class="fab" type="button" data-act="fab" aria-label="Ajouter">+</button></div><input type="file" id="photoIn" accept="image/*,.pdf" capture="environment" hidden>`;
 }
 function setHead(t, s, actions = '') { $('title').textContent = t; $('subtitle').textContent = s; $('actions').innerHTML = actions; }
 const edOpts = (cur, all = 'Toutes') => `<option value="">${all}</option>` + S.cache.editions.filter(e => !e.hidden).map(e => `<option ${e.id === cur ? 'selected' : ''} value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('');
@@ -266,8 +307,202 @@ function defaultsFor(kind) {
   const e = S.ctxEdition || currentEd();
   if (kind === 'paydef') return { currency: 'TND', fx_rate: fx(), paid_on: today(), kind: 'Paiement', edition_id: e };
   if (kind === 'expdef') return { currency: 'EUR', fx_rate: 1, spent_on: today(), type: 'Coût édition', paid_by: 'Caisse Circle', edition_id: e };
+  if (kind === 'trdef') return { kind: 'Retrait espèces', done_on: today(), edition_id: e, from_account: 'Boursorama', from_currency: 'EUR', to_account: 'Caisse Bali (IDR)', to_currency: 'IDR' };
   if (kind === 'jdef') return { happened_on: today(), kind: 'Remarque', edition_id: e, author: S.member?.display_name };
   return {};
+}
+
+
+/* ---------- Saisie rapide ---------- */
+const CAT_KW = [
+  ['Courses maison', /cours|kadhya|[eé]picer|supermarch|pepito|frisian|indomaret|alfamart|\beau\b|water|galon|snack|fruit|tokopedia|groceries/i],
+  ['Villa', /villa|loyer|rent|airbnb|piscine|m[eé]nage|laundry|lessive/i],
+  ['Coach', /coach|chahir|oussema|formateur/i],
+  ['Excursions', /excursion|\btour\b|batur|nusa|ubud|jeep|rafting|guide|temple|cascade|waterfall/i],
+  ['Surf & activités', /surf|yoga|padel|gym|plong|snorkel|massage|spa/i],
+  ['Dîners', /d[iî]ner|dinner|resto|restaurant|repas|lunch|d[eé]j|beach club|caf[eé]/i],
+  ['Transport', /essence|bensin|scooter|moto|grab|gojek|taxi|\bvan\b|driver|chauffeur|pick.?up|parking|transport|risman|a[eé]roport/i],
+  ['Matériel & cadeaux', /cadeau|gift|tote|gourde|tumbler|agenda|stylo|post-?it|projecteur|mat[eé]riel|print|impression|multiprise/i],
+  ['Publicité', /\bpub\b|\bads?\b|sponsor|meta|boost/i],
+  ['Visas', /visa|immigration|kitas/i],
+  ['Événements & meetups', /meet.?up|event|[eé]v[eé]nement|olga|speaker|conf[eé]rence/i],
+  ['Outils formation', /funding|abonnement|shopify|outil|logiciel|canva/i],
+  ['Banque & outils', /frais bancaire|carte qonto|domaine|domain|banque/i],
+  ['Frais de change', /frais de change|commission/i]
+];
+function parseAmounts(txt) {
+  const re = /(?:rp\.?\s*)?(\d+(?:[.,]\d+)*)\s*(k|m|jt|juta|rb|ribu)?\b\s*(€|eur(?:os?)?\b|idr\b|rp\b|rupiah\b|tnd\b|dt\b|dinars?\b)?/gi;
+  const out = []; let m;
+  while ((m = re.exec(txt))) {
+    let raw = m[1], val;
+    if (/^\d{1,3}(\.\d{3})+$/.test(raw)) val = Number(raw.replace(/\./g, ''));
+    else val = Number(raw.replace(',', '.'));
+    if (isNaN(val)) continue;
+    const mult = (m[2] || '').toLowerCase(); if (['k', 'rb', 'ribu'].includes(mult)) val *= 1e3; if (['m', 'jt', 'juta'].includes(mult)) val *= 1e6;
+    let cur = null; const c = (m[3] || '').toLowerCase(); const pre = /^rp/i.test(m[0]);
+    if (c.startsWith('€') || c.startsWith('eur')) cur = 'EUR'; else if (c === 'idr' || c === 'rp' || c === 'rupiah' || pre) cur = 'IDR'; else if (c === 'tnd' || c === 'dt' || c.startsWith('dinar')) cur = 'TND';
+    out.push({ val, cur, mult: !!mult, explicit: !!cur, text: m[0] });
+  }
+  return out;
+}
+function parseQuick(txt) {
+  const t = txt.trim(); if (!t) return null;
+  const low = t.toLowerCase();
+  let date = today(); if (/\bhier\b/.test(low)) date = new Date(Date.now() - 864e5).toISOString().slice(0, 10); if (/avant.?hier/.test(low)) date = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
+  const amts = parseAmounts(t);
+  amts.forEach(a => { if (!a.cur) a.cur = /\b(tnd|dt|dinars?)\b/i.test(low) ? 'TND' : /€|\beur/i.test(low) && amts.length === 1 ? 'EUR' : (a.mult || a.val >= 10000) ? 'IDR' : 'EUR'; });
+  let account = null;
+  if (/bourso/.test(low)) account = 'Boursorama'; else if (/\bwise\b/.test(low)) account = 'Wise'; else if (/revolut/.test(low)) account = 'Revolut'; else if (/qonto/.test(low)) account = 'Qonto'; else if (/biat/.test(low)) account = 'BIAT Tun'; else if (/path ?to ?travel/.test(low)) account = 'PathToTravel';
+  const cashWord = /\bcash\b|esp[eè]ce|liquide/.test(low);
+  let paid_by = 'Caisse Circle';
+  if (/perso|poche|avanc|pay[eé] par/.test(low)) { if (/youssef|ysf/.test(low)) paid_by = 'Youssef'; else if (/nah?e?d|nehed/.test(low)) paid_by = 'Nahed'; }
+  const isTransfer = /^(retrait|atm|dab|change|virement|d[eé]p[oô]t)\b/i.test(t);
+  let desc = t; amts.forEach(a => desc = desc.replace(a.text, ' ')); desc = desc.replace(/\b(hier|avant-hier|cash|bourso(rama)?|wise|revolut|qonto|biat|perso|poche|pay[eé] par|youssef|nahed|nehed|idr|rp|eur|euros?|tnd|dt)\b/gi, ' ').replace(/€/g, ' ').replace(/\s+/g, ' ').trim();
+  desc = desc ? desc[0].toUpperCase() + desc.slice(1) : '';
+  const ed = $('qEd')?.value || S.ctxEdition || currentEd() || null;
+  if (isTransfer) {
+    const kind = /^change/i.test(t) ? 'Change de devises' : /^virement/i.test(t) ? 'Virement interne' : /^d[eé]p[oô]t/i.test(t) ? 'Dépôt espèces' : 'Retrait espèces';
+    let from = null, to = null;
+    if (kind === 'Retrait espèces') { to = amts.find(a => a.cur === 'IDR') || amts.find(a => a.cur === 'TND'); from = amts.find(a => a !== to); }
+    else { from = amts[0]; to = amts[1]; if (!account && from?.cur === 'TND') account = 'BIAT Tun'; }
+    const toCur = to?.cur || (kind === 'Retrait espèces' ? 'IDR' : 'EUR');
+    const toAcc = kind === 'Retrait espèces' ? (toCur === 'TND' ? 'Espèces TND' : toCur === 'EUR' ? 'Espèces' : 'Caisse Bali (IDR)') : null;
+    return { type: 'transfer', rec: { kind, done_on: date, edition_id: ed, from_account: account || (kind === 'Retrait espèces' ? 'Boursorama' : null), from_amount: from ? from.val : null, from_currency: from?.cur || 'EUR', to_account: toAcc || (kind === 'Change de devises' && to?.cur === 'EUR' ? 'Boursorama' : null), to_amount: to ? to.val : null, to_currency: toCur, notes: `Saisie rapide : « ${t} »` } };
+  }
+  const a = amts.find(x => x.explicit || x.mult) || [...amts].sort((x, y) => y.val - x.val)[0]; if (!a) return { type: 'error', msg: 'Ajoutez un montant (ex. 350k, 45€, 2,4M)' };
+  if (!account && (cashWord || a.cur === 'IDR')) account = a.cur === 'TND' ? 'Espèces TND' : a.cur === 'EUR' ? 'Espèces' : 'Caisse Bali (IDR)';
+  if (paid_by !== 'Caisse Circle') account = null;
+  const cat = (CAT_KW.find(([, r]) => r.test(t)) || [null])[0];
+  const eur = toEur(a.val, a.cur);
+  const category = cat || (eur < 15 ? 'Petites dépenses' : 'À clarifier');
+  return { type: 'expense', rec: { edition_id: ed, spent_on: date, description: desc || category, category, amount: a.val, currency: a.cur, fx_rate: rate(a.cur), type: category === 'À clarifier' ? 'À clarifier' : category === 'Publicité' ? 'Marketing' : 'Coût édition', paid_from: account, paid_by, reimbursed: false, notes: `Saisie rapide : « ${t} »` }, eur };
+}
+function quickPreview(p) {
+  if (!p) return '<span class="muted">Tapez une dépense, un retrait ou un change. Entrée pour enregistrer.</span>';
+  if (p.type === 'error') return `<span class="warn-t">${esc(p.msg)}</span>`;
+  const r = p.rec;
+  if (p.type === 'transfer') { const loss = r.from_amount != null && r.to_amount != null ? toEur(r.from_amount, r.from_currency) - toEur(r.to_amount, r.to_currency) : null; return `${pill(r.kind, 'warn')} <b>${r.from_amount != null ? money(r.from_amount, r.from_currency) : '? ' + r.from_currency}</b> depuis <b>${esc(r.from_account || '?')}</b> → <b>${r.to_amount != null ? money(r.to_amount, r.to_currency) : '? ' + r.to_currency}</b> sur <b>${esc(r.to_account || '?')}</b>${loss != null ? ` · perte de change ${EUR(loss)} (taux obtenu ${NUM(r.to_amount / r.from_amount)})` : ' · <span class="warn-t">indiquez les deux montants pour calculer la perte</span>'} · ${fmtD(r.done_on)}`; }
+  return `${pill(r.category, r.category === 'À clarifier' ? 'bad' : 'mute')} <b>${esc(r.description)}</b> · <b>${money(r.amount, r.currency)}</b>${r.currency !== 'EUR' ? ` ≈ ${EUR(p.eur)}` : ''} · ${r.paid_by !== 'Caisse Circle' ? `avancé par <b>${r.paid_by}</b>` : `compte : <b>${esc(r.paid_from || 'à préciser')}</b>`} · ${fmtD(r.spent_on)}`;
+}
+function quickBar(ed) {
+  return `<div class="card quick"><div class="qhead"><b>Saisie rapide</b><span class="muted">Exemples : « courses 350k » · « essence 45€ bourso » · « surf 2,4M » · « dîner 1,2M perso youssef hier » · « retrait 2M bourso 101€ » · « change 1000 dt 280€ »</span></div>
+  <div class="qrow"><input id="qIn" autocomplete="off" placeholder="Ex. courses 350k cash"><select id="qEd" aria-label="Bootcamp">${edOpts(ed || '', 'Sans édition')}</select><button class="btn primary" type="button" data-act="qsave">Ajouter</button><button class="btn" type="button" data-act="photo">Photo d’un ticket</button><button class="btn" type="button" data-act="add" data-t="transfers" data-def="trdef">Retrait / change</button></div>
+  <div id="qPrev" class="qprev">${quickPreview(null)}</div></div>`;
+}
+async function quickSave() {
+  const el = $('qIn'); const p = parseQuick(el.value);
+  if (!p || p.type === 'error') { toast(p ? p.msg : 'Rien à enregistrer', true); return; }
+  await q(sb.from(p.type === 'transfer' ? 'transfers' : 'expenses').insert(p.rec));
+  toast(p.type === 'transfer' ? 'Transfert enregistré' : `Dépense enregistrée : ${p.rec.description}`);
+  const ed = $('qEd')?.value; await route(); const n = $('qIn'); if (n) { n.focus(); if ($('qEd')) $('qEd').value = ed; }
+}
+
+/* ---------- Budget prévu / réel ---------- */
+const BUDGET_MAP = { 'Visas C9 + coach': ['Visas'], 'Surf, meet-ups, pick-ups': ['Surf & activités', 'Événements & meetups', 'Transport'], 'Courses maison': ['Courses maison', 'Petites dépenses'] };
+function budgetVsReal(s, D) {
+  const lines = D.budget.filter(b => b.edition_id === s.ed.id);
+  const real = {}; s.costs.forEach(x => real[x.category] = (real[x.category] || 0) + N(x.amount_eur));
+  const used = new Set();
+  const rows = lines.sort((a, b) => b.amount_eur - a.amount_eur).map(l => { const cats = BUDGET_MAP[l.category] || [l.category]; cats.forEach(c => used.add(c)); return { name: l.category, plan: N(l.amount_eur), real: sum(cats, c => real[c] || 0), id: l.id }; });
+  const others = Object.entries(real).filter(([c]) => !used.has(c));
+  const imp = rows.find(r => /impr[eé]vu/i.test(r.name));
+  if (imp) { imp.real += sum(others, o => o[1]); imp.detail = others.map(([c, v]) => `${c} ${EUR(v)}`).join(' · '); }
+  else others.forEach(([c, v]) => rows.push({ name: c, plan: 0, real: v }));
+  if (fraisOf(s)) rows.push({ name: 'Pertes de change (calculées)', plan: 0, real: fraisOf(s) });
+  const tp = sum(rows, r => r.plan), tr = sum(rows, r => r.real);
+  const copy = `<div class="inline"><select id="cbFrom">${D.eds.filter(e => e.id !== s.ed.id && D.budget.some(b => b.edition_id === e.id)).map(e => `<option value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('')}</select><button class="btn sm" type="button" data-act="copybudget" data-id="${s.ed.id}">Copier ce budget ici</button></div>`;
+  return `<div class="card"><div class="head"><h2>Prévu / réel par poste</h2><button class="btn sm" type="button" data-act="add" data-t="edition_budget_lines" data-def="${J({ edition_id: s.ed.id })}">+ Poste prévu</button></div>
+  ${lines.length ? '' : `<p class="muted">Pas encore de budget prévu pour cette édition. Copiez celui d’une autre édition, puis ajustez.</p>${copy}`}
+  <div class="table-wrap"><table class="bvr"><thead><tr><th>Poste</th><th class="n">Prévu</th><th class="n">Réel</th><th style="min-width:160px"></th><th class="n">Écart</th></tr></thead><tbody>
+  ${rows.map(r => { const over = r.plan && r.real > r.plan; return `<tr ${r.id ? `class="click" data-act="edit" data-t="edition_budget_lines" data-id="${r.id}"` : ''}><td>${esc(r.name)}${r.detail ? `<div class="muted">${esc(r.detail)}</div>` : ''}</td><td class="n">${r.plan ? EUR(r.plan) : '—'}</td><td class="n">${EUR(r.real)}</td><td>${r.plan ? pbar(r.real / r.plan, Math.round(r.real / r.plan * 100) + ' %').replace('class="pbar', `class="pbar ${over ? 'over' : ''}`) : ''}</td><td class="n ${over ? 'neg' : ''}">${r.plan ? (r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan) : 'hors budget'}</td></tr>`; }).join('')}
+  <tr class="sep"><td><b>Total</b></td><td class="n"><b>${EUR(tp)}</b></td><td class="n"><b>${EUR(tr)}</b></td><td>${tp ? pbar(tr / tp) : ''}</td><td class="n"><b class="${tr > tp && tp ? 'neg' : ''}">${tp ? EUR(tr - tp) : ''}</b></td></tr></tbody></table></div></div>`;
+}
+const fraisOf = s => N(s.fraisChange);
+function envelope(s) {
+  const e = s.ed; if (!e.start_date || !e.end_date) return '';
+  const envIdr = N(S.settings.enveloppe_courses_idr) || 4000000, envEur = toEur(envIdr, 'IDR');
+  const start = new Date(e.start_date + 'T00:00:00'), weeks = Math.ceil((new Date(e.end_date + 'T00:00:00') - start) / 864e5 / 7) || 1;
+  const ex = s.costs.filter(x => ['Courses maison', 'Petites dépenses'].includes(x.category));
+  const rows = []; for (let i = 0; i < weeks; i++) { const a = new Date(+start + i * 7 * 864e5).toISOString().slice(0, 10), b = new Date(+start + (i + 1) * 7 * 864e5).toISOString().slice(0, 10); rows.push({ i, a, v: sum(ex.filter(x => x.spent_on && x.spent_on >= a && x.spent_on < b), x => x.amount_eur) }); }
+  const outside = sum(ex.filter(x => !x.spent_on || x.spent_on < e.start_date || x.spent_on >= new Date(+start + weeks * 7 * 864e5).toISOString().slice(0, 10)), x => x.amount_eur);
+  return `<div class="card"><div class="head"><h2>Enveloppe courses & petites dépenses</h2><span class="muted">${IDR(envIdr)} ≈ ${EUR(envEur)} par semaine · modifiable dans Réglages</span></div>
+  <div class="paybars">${rows.map(r => `<div class="paybar"><div class="pb-head"><b>Semaine ${r.i + 1}</b><span class="muted">dès le ${fmtD(r.a)}</span><span class="num">${EUR(r.v)} / ${EUR(envEur)}</span></div>${pbar(r.v / envEur).replace('class="pbar', `class="pbar ${r.v > envEur ? 'over' : ''}`)}</div>`).join('')}</div>
+  ${outside ? `<p class="muted">${EUR(outside)} de courses hors des semaines du bootcamp (avant, après ou sans date).</p>` : ''}<p class="muted">Pas besoin de noter chaque bouteille d’eau : une ligne « courses semaine 2 » avec la photo des tickets suffit.</p></div>`;
+}
+function owesBox(D, edId) {
+  const o = whoOwes(D, edId);
+  return `<div class="card owes"><div class="head"><h2>Qui doit quoi à qui</h2></div>${o.length ? o.map(x => `<div class="row"><div class="grow">La caisse The Circle doit <b>${EUR(x.total)}</b> à <b>${esc(x.who)}</b><div class="sub">${x.n} dépense(s) avancée(s) de sa poche</div></div><button class="btn sm" type="button" data-act="reimburse" data-who="${esc(x.who)}" data-ed="${esc(edId || '')}">Marquer remboursé</button></div>`).join('') : '<div class="empty-state">Personne n’a d’argent à récupérer</div>'}</div>`;
+}
+
+/* ---------- Comptes & circuit de l'argent ---------- */
+function comptesHtml(D) {
+  const acc = accountBalances(D);
+  const zones = { tn: { t: 'Tunisie · dinars', sub: 'Les participants paient en TND. Le dinar ne sort pas : il faut le changer ou le dépenser sur place.', list: [] }, eu: { t: 'Europe · euros', sub: 'Bourso (Nahed), Qonto (société de Nahed), Wise, Revolut, espèces €.', list: [] }, bali: { t: 'Bali · roupies', sub: 'Caisse cash de la villa, alimentée par les retraits.', list: [] } };
+  acc.filter(a => a.name !== 'Non renseigné').forEach(a => zones[ZONE(a)].list.push(a)); const nr = acc.find(a => a.name === 'Non renseigné');
+  const tr = D.transfers || [];
+  const flows = {}; tr.forEach(t => { const fa = S.cache.accounts.find(x => x.name === t.from_account), ta = S.cache.accounts.find(x => x.name === t.to_account); const fz = fa ? ZONE({ cur: fa.currency }) : '?', tz = ta ? ZONE({ cur: ta.currency }) : '?'; const k = fz + '>' + tz; const f = flows[k] ||= { n: 0, out: 0, inn: 0, loss: 0, complete: 0 }; f.n++; if (t.from_amount != null) f.out += toEur(t.from_amount, t.from_currency); if (t.to_amount != null) f.inn += toEur(t.to_amount, t.to_currency); if (t.from_amount != null && t.to_amount != null) { f.loss += toEur(t.from_amount, t.from_currency) - toEur(t.to_amount, t.to_currency); f.complete++; } });
+  const fl = (k, label) => { const f = flows[k]; return `<div class="flow"><span>${label}</span>${f ? `<b>${EUR(f.out)}</b><small>${f.n} opération(s) · perte ${EUR(f.loss)}${f.out ? ` (${NUM(f.loss / f.out * 100)} %)` : ''}</small>` : '<small>aucune opération saisie</small>'}</div>`; };
+  const totalLoss = sum(Object.values(flows), f => f.loss), feeExp = sum(D.exps.filter(x => x.category === 'Frais de change'), x => x.amount_eur);
+  const zoneCard = z => `<div class="card zone"><div class="head"><h2>${z.t}</h2><b class="num">${EUR(sum(z.list, a => a.balEur))}</b></div><p class="muted">${z.sub}</p>${z.list.map(a => `<div class="acct"><div class="grow"><b>${esc(a.name)}</b><div class="sub">${esc(a.holder)} · entrées ${money(a.in, a.cur)} · sorties ${money(a.out, a.cur)}</div></div><div class="r"><b class="num ${a.bal < 0 ? 'neg' : ''}">${money(a.bal, a.cur)}</b>${a.cur !== 'EUR' ? `<small>≈ ${EUR(a.balEur)}</small>` : ''}</div></div>`).join('') || '<div class="empty-state">—</div>'}</div>`;
+  const cash = cashStatus(D);
+  return `<p class="muted">Soldes calculés à partir de tout ce qui est saisi : encaissements, dépenses, retraits et changes. Un solde négatif veut dire qu’une entrée ou un transfert manque. « Non renseigné » doit tendre vers zéro.</p>
+  <div class="circuit">${zoneCard(zones.tn)}<div class="arrows">${fl('tn>eu', 'Change TND → €')}${fl('tn>bali', 'TND → roupies')}</div>${zoneCard(zones.eu)}<div class="arrows">${fl('eu>bali', 'Retraits € → roupies')}${fl('eu>eu', 'Virements entre comptes €')}</div>${zoneCard(zones.bali)}</div>
+  ${nr ? `<a class="card warnbox" href="#finances/clarifier"><b>Compte non renseigné : ${EUR(nr.inEur)} d’entrées et ${EUR(nr.outEur)} de sorties sans compte indiqué.</b><span class="muted">Tant que ces lignes n’ont pas de compte, les soldes ci-dessus sont faux. Cliquez pour les compléter dans « À clarifier ».</span></a>` : ''}
+  <div class="grid g3">${kpi('Pertes de change calculées', EUR(totalLoss), 'retraits et changes avec les deux montants')}${kpi('Frais de change notés en dépenses', EUR(feeExp), 'anciennes saisies (été 2026)')}${kpi('Argent total, toutes zones', EUR(sum(acc, a => a.balEur)), 'au taux de référence')}</div>
+  <div class="split"><div class="card"><div class="head"><h2>Retraits, changes, virements</h2><button class="btn sm primary" type="button" data-act="add" data-t="transfers" data-def="trdef">+ Ajouter</button></div>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>De → vers</th><th class="n">Sorti</th><th class="n">Arrivé</th><th class="n">Taux obtenu</th><th class="n">Perte</th></tr></thead><tbody>${tr.map(t => { const ok = t.from_amount != null && t.to_amount != null, loss = ok ? toEur(t.from_amount, t.from_currency) - toEur(t.to_amount, t.to_currency) : null; return `<tr class="click" data-act="edit" data-t="transfers" data-id="${t.id}"><td>${fmtD(t.done_on)}</td><td>${esc(t.kind)}</td><td>${esc(t.from_account || '?')} → ${esc(t.to_account || '?')}</td><td class="n">${t.from_amount != null ? money(t.from_amount, t.from_currency) : pill('à compléter', 'bad')}</td><td class="n">${t.to_amount != null ? money(t.to_amount, t.to_currency) : pill('à compléter', 'bad')}</td><td class="n">${ok && t.from_currency !== t.to_currency ? NUM(t.to_amount / t.from_amount) : ''}</td><td class="n">${ok ? EUR(loss) : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="empty-state">Aucun retrait ou change saisi. Exemple : « retrait 2M bourso 101€ » dans la saisie rapide.</td></tr>'}</tbody></table></div>
+  <p class="muted">Taux de référence : ${NUM(fx())} TND et ${IDR(rate('IDR'))} pour 1 €. La perte = valeur sortie − valeur arrivée à ces taux (frais du distributeur, commission, mauvais taux).</p></div>
+  <div class="card"><div class="head"><h2>Caisses cash</h2></div>${cash.map(c => `<div class="acct"><div class="grow"><b>${esc(c.a.name)}</b><div class="sub">${c.c ? `Compté ${money(c.c.amount, c.cur)} le ${fmtD(c.c.counted_on)} · attendu ${money(c.expectedAt, c.cur)} · ${Math.abs(c.ecart) < rate(c.cur) * 2 ? '<span class="good-t">juste</span>' : `<span class="warn-t">écart ${money(c.ecart, c.cur)}</span>`}` : 'Jamais comptée'}</div></div><div class="r"><b class="num">${money(c.now, c.cur)}</b><small>devrait être dans la caisse</small><button class="btn sm" type="button" data-act="add" data-t="cash_counts" data-def="${J({ account: c.a.name, counted_on: today() })}">Compter</button></div></div>`).join('')}<p class="muted">Une fois par semaine, comptez le cash et notez-le : l’écart montre ce qui n’a pas été noté.</p></div></div>`;
+}
+
+/* ---------- Import d'un relevé bancaire (CSV) ---------- */
+function parseCsv(text) {
+  const first = text.split(/\r?\n/)[0] || ''; const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) { const ch = text[i]; if (inQ) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; } else cell += ch; } else if (ch === '"') inQ = true; else if (ch === sep) { row.push(cell); cell = ''; } else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; } else cell += ch; }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+const numFr = v => { if (v == null) return NaN; const s = String(v).replace(/[\s €]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'); return s === '' ? NaN : Number(s); };
+const dateFr = v => { v = String(v || '').trim(); let m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/); if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : null; };
+let IMP = [];
+function importDrawer() {
+  openDrawer(`${drawerHead('Importer un relevé bancaire')}
+  <p class="muted">Dans l’appli Boursorama (ou Wise, Revolut, Qonto) : téléchargez les opérations du mois au format CSV, puis déposez le fichier ici. Les opérations déjà saisies sont reconnues et décochées. Les retraits deviennent des retraits vers la caisse Bali.</p>
+  <div class="form"><label class="field">Compte<select id="impAcc">${S.cache.accounts.map(a => `<option ${a.name === 'Boursorama' ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
+  <label class="field">Bootcamp<select id="impEd">${edOpts(S.ctxEdition || currentEd(), 'Sans édition')}</select></label>
+  <label class="field">Fichier CSV<input type="file" id="impFile" accept=".csv,text/csv"></label></div><div id="impPrev"></div>`);
+}
+async function importPreview(file) {
+  const buf = await file.arrayBuffer(); let text = new TextDecoder('utf-8').decode(buf); if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);
+  const rows = parseCsv(text); if (rows.length < 2) { $('impPrev').innerHTML = '<div class="msg err">Fichier vide ou illisible.</div>'; return; }
+  const h = rows[0].map(x => x.toLowerCase().trim());
+  const ci = re => h.findIndex(x => re.test(x));
+  let iD = ci(/date ?op|dateop|^date$|date/), iL = ci(/libell|label|description|wording|d[eé]tail|merchant|payee/), iA = ci(/^montant$|amount|^montant/), iDeb = ci(/d[eé]bit/), iCre = ci(/cr[eé]dit/);
+  if (iL < 0) iL = 2;
+  const acc = $('impAcc').value, D = await loadData();
+  IMP = rows.slice(1).map((r, n) => {
+    const date = dateFr(r[iD]); let amt = iA >= 0 ? numFr(r[iA]) : (numFr(r[iCre]) || 0) - (numFr(r[iDeb]) || 0);
+    const label = (r[iL] || '').replace(/\s+/g, ' ').trim();
+    const retrait = /retrait|\bdab\b|\batm\b|cash withdrawal|withdraw/i.test(label);
+    const dup = D.exps.some(x => x.paid_from === acc && x.spent_on === date && Math.abs(N(x.amount_eur) + amt) < 0.01) || (D.transfers || []).some(t => t.from_account === acc && t.done_on === date && Math.abs(N(t.from_amount) + amt) < 0.01);
+    const cat = (CAT_KW.find(([, re]) => re.test(label)) || [null])[0];
+    return { n, date, label, amt, retrait, dup, cat, take: amt < 0 && !dup };
+  }).filter(x => x.date && !isNaN(x.amt));
+  const neg = IMP.filter(x => x.amt < 0), pos = IMP.filter(x => x.amt > 0);
+  $('impPrev').innerHTML = `<div class="head"><h3>${neg.length} sorties · ${pos.length} entrées</h3></div>
+  <div class="table-wrap"><table><tbody>${neg.map(x => `<tr><td><input type="checkbox" data-imp="${x.n}" ${x.take ? 'checked' : ''}></td><td>${fmtD(x.date)}</td><td>${esc(x.label)}<div class="muted">${x.dup ? 'déjà saisie' : x.retrait ? 'retrait → caisse Bali' : esc(x.cat || 'à clarifier')}</div></td><td class="n">${EUR(-x.amt)}</td></tr>`).join('')}</tbody></table></div>
+  ${pos.length ? `<p class="muted">Entrées non importées (à saisir comme encaissements si ce sont des participants) : ${pos.map(x => `${fmtD(x.date)} ${esc(x.label)} ${EUR(x.amt)}`).join(' · ')}</p>` : ''}
+  <button class="btn primary" type="button" data-act="impgo">Importer les lignes cochées</button>`;
+}
+async function importGo() {
+  const acc = $('impAcc').value, ed = $('impEd').value || null;
+  const sel = IMP.filter(x => document.querySelector(`[data-imp="${x.n}"]`)?.checked);
+  const exps = sel.filter(x => !x.retrait).map(x => ({ edition_id: ed, spent_on: x.date, description: x.label.slice(0, 120), category: x.cat || 'À clarifier', amount: -x.amt, currency: 'EUR', fx_rate: 1, type: x.cat ? (x.cat === 'Publicité' ? 'Marketing' : 'Coût édition') : 'À clarifier', paid_from: acc, paid_by: 'Caisse Circle', notes: 'Import relevé ' + acc }));
+  const trs = sel.filter(x => x.retrait).map(x => ({ kind: 'Retrait espèces', done_on: x.date, edition_id: ed, from_account: acc, from_amount: -x.amt, from_currency: 'EUR', to_account: 'Caisse Bali (IDR)', to_amount: null, to_currency: 'IDR', notes: `Import relevé ${acc} : ${x.label}. Indiquez les roupies reçues.` }));
+  if (exps.length) await q(sb.from('expenses').insert(exps));
+  if (trs.length) await q(sb.from('transfers').insert(trs));
+  closeDrawer(); toast(`${exps.length} dépense(s) et ${trs.length} retrait(s) importés`); route();
 }
 
 /* ---------- Vues ---------- */
@@ -376,14 +611,14 @@ V.edition = async id => {
   let body = '';
   if (edTab === 'resume') {
     const cats = {}; s.costs.forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
-    body = `<div class="grid g4">${kpi('Participants', `${s.active.length} / ${e.capacity}`, s.parts.length - s.active.length ? `${s.parts.length - s.active.length} absent(s) : exclu, annulé ou reporté` : '')}${kpi('Encaissé', EUR(s.enc), `sur ${EUR(s.attendu)} attendus · reste ${EUR(s.reste)}`)}${kpi('Dépenses', EUR(s.couts), s.budget ? `budget prévu ${EUR(s.budget)}` : 'pas de budget saisi')}${kpi('Gain chacun aujourd’hui', EUR(s.now.part), `prévu : ${EUR(s.prev.part)}`)}</div>
+    body = `<div class="grid g4">${kpi('Participants', `${s.active.length} / ${e.capacity}`, s.parts.length - s.active.length ? `${s.parts.length - s.active.length} absent(s) : exclu, annulé ou reporté` : '')}${kpi('Encaissé', EUR(s.enc), `sur ${EUR(s.attendu)} attendus · reste ${EUR(s.reste)}`)}${kpi('Dépenses', EUR(s.couts), `${EUR(s.couts / (s.active.length || 1))} par participant${s.budget ? ` · budget ${EUR(s.budget)}` : ''}`)}${kpi('Gain chacun aujourd’hui', EUR(s.now.part), `prévu : ${EUR(s.prev.part)}`)}</div>
     <div class="split"><div>${gainTable(s)}</div><div class="card"><div class="head"><h2>Encaissement par participant</h2></div>${payBars(s.parts)}
     <div class="head" style="margin-top:12px"><h2>Dépenses par catégorie</h2></div>${catChart(cats)}
     <div class="head" style="margin-top:12px"><h2>Dernières notes</h2><button class="btn sm" type="button" data-act="tab" data-v="journal">Tout le journal</button></div>${journalFeed(journal.slice(0, 4))}</div></div>`;
   }
   if (edTab === 'participants') body = `<div class="card"><div class="head"><h2>Participants</h2><button class="btn primary sm" type="button" data-act="add" data-t="participants" data-def="${J({ edition_id: id, status: 'Confirmé', pay_currency: 'TND' })}">+ Participant</button></div>${await partTable(s.parts)}</div>`;
   if (edTab === 'entrees') body = `<div class="card"><div class="head"><h2>Ce que chacun doit payer</h2></div>${payBars(s.parts)}</div><div class="card"><div class="head"><h2>Tous les encaissements en détail</h2><button class="btn primary sm" type="button" data-act="add" data-t="payments" data-def="paydef">+ Encaissement</button></div>${payTable(s.pays, pn)}</div>`;
-  if (edTab === 'depenses') body = `<div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn primary sm" type="button" data-act="add" data-t="expenses" data-def="expdef">+ Dépense</button></div>${expFeed(s.exps, D)}</div>`;
+  if (edTab === 'depenses') body = `${quickBar(id)}${budgetVsReal(s, D)}<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn primary sm" type="button" data-act="add" data-t="expenses" data-def="expdef">+ Dépense détaillée</button></div>${expFeed(s.exps, D)}</div><div>${owesBox(D, id)}${envelope(s)}</div></div>`;
   if (edTab === 'journal') body = `<div class="card"><div class="head"><h2>Journal de l’édition</h2><button class="btn primary sm" type="button" data-act="add" data-t="edition_journal" data-def="jdef">+ Note</button></div><p class="muted">Remarques, problèmes, contenu filmé (avec le lien Drive), changements, retours des participants.</p>${journalFeed(journal)}</div>`;
   if (edTab === 'incidents') body = `<div class="card"><div class="head"><h2>Incidents</h2><button class="btn primary sm" type="button" data-act="add" data-t="incidents" data-def="${J({ edition_id: id, occurred_on: today(), status: 'Ouvert' })}">+ Incident</button></div><div class="list">${incidents.map(x => `<button type="button" class="row click" data-act="edit" data-t="incidents" data-id="${x.id}"><span class="stripe ${x.status === 'Clos' ? '' : 'bad'}"></span><div class="grow"><div><b>${esc(x.type)}</b> · ${fmtD(x.occurred_on)} ${pill(x.status, x.status === 'Clos' ? 'good' : 'warn')}</div><div class="sub">${esc(x.description)}</div>${x.decision ? `<div class="sub">Décision : ${esc(x.decision)}</div>` : ''}</div></button>`).join('') || '<div class="empty-state">Aucun incident</div>'}</div></div>`;
   if (edTab === 'budget') {
@@ -479,7 +714,7 @@ V.finances = async arg => {
   const tot = k => sum(all, s => k(s));
   const clar = clarify(D, finEdition);
   const pn = id => D.parts.find(p => p.id === id)?.full_name || '—';
-  const tabs = [['resume', 'Vue d’ensemble'], ['entrees', 'Entrées'], ['depenses', 'Dépenses'], ['gain', 'Gain fondateurs'], ['comptes', 'Comptes'], ['clarifier', `À clarifier (${sum(clar.filter(g => g.kind !== 'mute'), g => g.items.length)})`]];
+  const tabs = [['resume', 'Vue d’ensemble'], ['entrees', 'Entrées'], ['depenses', 'Dépenses'], ['gain', 'Gain fondateurs'], ['comptes', 'Comptes & circuit de l’argent'], ['clarifier', `À clarifier (${sum(clar.filter(g => g.kind !== 'mute'), g => g.items.length)})`]];
   let body = '';
   if (finTab === 'resume') body = `<div class="grid g4">${kpi('Encaissé', EUR(tot(s => s.enc)), `sur ${EUR(tot(s => s.attendu))} attendus`)}${kpi('Reste à encaisser', EUR(tot(s => s.reste)), `${sum(all, s => s.parts.filter(b => b.reste > 1).length)} personne(s)`)}${kpi('Dépenses', EUR(tot(s => s.couts)), 'hors avances sur gain')}${kpi('Gain chacun aujourd’hui', EUR(tot(s => s.now.part)), `prévu : ${EUR(tot(s => s.prev.part))}`)}</div>
     <div class="card"><div class="head"><h2>Par édition</h2></div><div class="table-wrap"><table><thead><tr><th>Édition</th><th style="min-width:160px">Encaissement</th><th class="n">Encaissé</th><th class="n">Reste</th><th class="n">Dépenses</th><th class="n">Résultat</th><th class="n">Gain chacun (prévu)</th></tr></thead><tbody>${all.map(s => `<tr class="click" data-act="go" data-href="#edition/${s.ed.id}"><td><b>${esc(s.ed.skill)}</b><div class="muted">${s.ed.id}</div></td><td>${pbar(s.attendu ? s.enc / s.attendu : 0)}</td><td class="n">${EUR(s.enc)}</td><td class="n">${EUR(s.reste)}</td><td class="n">${EUR(s.couts)}</td><td class="n">${EUR(s.now.res)}</td><td class="n">${EUR(s.prev.part)}</td></tr>`).join('')}</tbody></table></div><p class="muted">Les éditions de l’été 2026 n’ont que les encaissements importés du Drive : leurs dépenses restent à saisir.</p></div>`;
@@ -487,10 +722,10 @@ V.finances = async arg => {
   if (finTab === 'depenses') {
     const exps = (finEdition ? D.exps.filter(x => x.edition_id === finEdition) : D.exps).filter(x => !expCat || x.category === expCat);
     const cats = {}; (finEdition ? D.exps.filter(x => x.edition_id === finEdition) : D.exps).filter(x => x.type !== 'Frais fondateurs').forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
-    body = `<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><select id="expCat" data-var="expCat"><option value="">Toutes catégories</option>${EXP_CATS.map(c => `<option ${c === expCat ? 'selected' : ''}>${c}</option>`).join('')}</select></div><p class="muted">Chaque dépense peut avoir une photo / facture, et être détaillée (ex. un retrait Bourso qui a servi à l’excursion et aux courses). Les petites courses du coin : catégorie « Petites dépenses », une ligne par semaine suffit.</p>${expFeed(exps, D)}</div><div class="card"><div class="head"><h2>Par catégorie</h2></div>${catChart(cats)}</div></div>`;
+    body = `${quickBar(finEdition)}<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn sm" type="button" data-act="import">Importer un relevé (CSV)</button><select id="expCat" data-var="expCat"><option value="">Toutes catégories</option>${EXP_CATS.map(c => `<option ${c === expCat ? 'selected' : ''}>${c}</option>`).join('')}</select></div><p class="muted">Chaque dépense peut avoir une photo / facture, et être détaillée (ex. un retrait Bourso qui a servi à l’excursion et aux courses). Les petites courses du coin : catégorie « Petites dépenses », une ligne par semaine suffit.</p>${expFeed(exps, D)}</div><div>${owesBox(D, finEdition)}<div class="card"><div class="head"><h2>Par catégorie</h2></div>${catChart(cats)}</div></div></div>`;
   }
   if (finTab === 'gain') body = all.filter(s => s.enc || s.couts).map(s => gainTable(s, `${esc(s.ed.skill)} · ${s.ed.id}`)).join('') + `<div class="card"><div class="head"><h2>Avances sur gain enregistrées</h2></div>${expFeed(D.exps.filter(x => x.type === 'Frais fondateurs' && (!finEdition || x.edition_id === finEdition)), D)}</div>`;
-  if (finTab === 'comptes') { const acc = accountBalances(D, finEdition); body = `<div class="card"><div class="head"><h2>Où est l’argent</h2><a class="more" href="#reglages">Gérer les comptes</a></div><p class="muted">Entrées moins sorties enregistrées par compte. Les virements entre vos comptes (ex. change de dinars vers Bourso) ne sont pas suivis ici : un compte peut donc paraître positif ou négatif. Le plus important : que « Non renseigné » soit à zéro.</p><div class="table-wrap"><table><thead><tr><th>Compte</th><th>Titulaire</th><th class="n">Entrées</th><th class="n">Sorties</th><th class="n">Solde théorique</th></tr></thead><tbody>${acc.map(a => { const info = S.cache.accounts.find(x => x.name === a.name); return `<tr><td><b>${esc(a.name)}</b></td><td>${esc(info?.holder || '')}</td><td class="n">${EUR(a.in)}</td><td class="n">${EUR(a.out)}</td><td class="n"><b class="${a.in - a.out < 0 ? 'neg' : ''}">${EUR(a.in - a.out)}</b></td></tr>`; }).join('')}</tbody></table></div></div>`; }
+  if (finTab === 'comptes') body = comptesHtml(D);
   if (finTab === 'clarifier') body = `<p class="muted">Chaque ligne s’ouvre : corrigez directement et elle disparaît de la liste. Les totaux se recalculent seuls.</p>${clarifyHtml(clar)}`;
   return `<div class="toolbar"><label for="finEd" class="muted">Édition</label><select id="finEd" data-var="finEdition">${edOpts(finEdition)}</select></div><div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="setvar" data-k="finTab" data-v="${k}" class="${finTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 };
@@ -586,6 +821,12 @@ document.addEventListener('click', async e => {
     case 'doc': { const has = t.classList.contains('ok'); await q(sb.from('participant_documents').upsert({ participant_id: d.id, doc_type: d.doc, received: !has, received_at: has ? null : today() }, { onConflict: 'participant_id,doc_type' })); participantDetail(d.id); break; }
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
+    case 'qsave': quickSave(); break;
+    case 'photo': $('photoIn').click(); break;
+    case 'import': await ensureLookups(); importDrawer(); break;
+    case 'impgo': importGo(); break;
+    case 'reimburse': { if (!t.dataset.armed) { t.dataset.armed = 1; t.textContent = 'Confirmer : tout est remboursé'; break; } let qq = sb.from('expenses').update({ reimbursed: true }).eq('paid_by', d.who).eq('reimbursed', false); if (d.ed) qq = qq.eq('edition_id', d.ed); await q(qq); toast('Noté comme remboursé'); route(); break; }
+    case 'copybudget': { const from = $('cbFrom')?.value; if (!from) break; const D = await loadData(); const lines = D.budget.filter(b => b.edition_id === from).map(b => ({ edition_id: d.id, category: b.category, amount_eur: b.amount_eur })); await q(sb.from('edition_budget_lines').insert(lines)); toast(`${lines.length} postes copiés`); route(); break; }
     case 'saveset': { const v = $('set_' + d.id).value.trim(); await q(sb.from('settings').update({ value: v }).eq('key', d.id)); S.settings[d.id] = v; toast('Réglage enregistré'); break; }
     case 'convert': {
       const l = await q(sb.from('leads').select('*').eq('id', d.id).single());
@@ -596,7 +837,15 @@ document.addEventListener('click', async e => {
     }
   }
 });
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
+  if (e.target.id === 'impFile' && e.target.files[0]) return importPreview(e.target.files[0]);
+  if (e.target.id === 'impAcc' && $('impFile')?.files[0]) return importPreview($('impFile').files[0]);
+  if (e.target.id === 'photoIn' && e.target.files[0]) {
+    const f = e.target.files[0]; e.target.value = ''; toast('Envoi de la photo…');
+    const path = await upload(f, 'expenses');
+    const rows = await q(sb.from('expenses').insert({ edition_id: S.ctxEdition || currentEd() || null, spent_on: today(), description: 'Ticket à compléter', category: 'À clarifier', amount: 0, currency: 'IDR', fx_rate: rate('IDR'), type: 'À clarifier', paid_from: 'Caisse Bali (IDR)', paid_by: 'Caisse Circle', receipt_path: path, notes: 'Créée depuis une photo' }).select());
+    route(); if (rows?.[0]) editById('expenses', rows[0].id); return;
+  }
   const v = e.target.dataset.var; if (!v) return;
   if (v === 'crmEdition') crmEdition = e.target.value;
   if (v === 'finEdition') finEdition = e.target.value;
@@ -604,12 +853,12 @@ document.addEventListener('change', e => {
   route();
 });
 let annT;
-document.addEventListener('input', e => { if (e.target.id === 'annQ') { annQ = e.target.value; clearTimeout(annT); annT = setTimeout(async () => { const pos = e.target.selectionStart; await route(); const el = $('annQ'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 250); } });
+document.addEventListener('input', e => { if (e.target.id === 'qIn') { $('qPrev').innerHTML = quickPreview(parseQuick(e.target.value)); return; } if (e.target.id === 'annQ') { annQ = e.target.value; clearTimeout(annT); annT = setTimeout(async () => { const pos = e.target.selectionStart; await route(); const el = $('annQ'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 250); } });
 document.addEventListener('dragstart', e => { const c = e.target.closest('.lead'); if (c) e.dataTransfer.setData('text/plain', c.dataset.lead); });
 document.addEventListener('dragover', e => { const c = e.target.closest('.col'); if (c) { e.preventDefault(); c.classList.add('over'); } });
 document.addEventListener('dragleave', e => { const c = e.target.closest('.col'); if (c) c.classList.remove('over'); });
 document.addEventListener('drop', async e => { const c = e.target.closest('.col'); if (!c) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); await q(sb.from('leads').update({ status: c.dataset.status }).eq('id', id)); toast('Statut mis à jour : ' + c.dataset.status); route(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); $('fabMenu')?.classList.remove('on'); } });
+document.addEventListener('keydown', e => { if (e.target.id === 'qIn' && e.key === 'Enter') { e.preventDefault(); quickSave(); return; } if (e.key === 'Escape') { closeDrawer(); $('fabMenu')?.classList.remove('on'); } });
 
 /* ---------- Connexion ---------- */
 function loginView(msg = '', err = false) {
