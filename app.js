@@ -107,10 +107,11 @@ async function editRow(table, row = null, defaults = {}, after = null) {
   const sc = SCHEMAS[table], key = sc.key || 'id', isNew = !row, data = row || defaults;
   const fileCols = sc.fields.filter(f => f[2] === 'file').map(f => f[4]);
   const extra = !isNew && sc.extra ? await sc.extra(row) : '';
-  openDrawer(`${drawerHead(`${isNew ? 'Ajouter' : 'Modifier'} · ${sc.title}`)}
+  const top = !isNew && sc.extraTop && sc.extraTop(row);
+  openDrawer(`${drawerHead(`${isNew ? 'Ajouter' : 'Modifier'} · ${sc.title}`)}${top ? extra : ''}
   <form class="form" id="gform">${sc.fields.filter(f => !(f[0] === key && !isNew && table === 'editions')).map(f => fieldHtml(f, f[2] === 'file' ? data[f[4]] : data[f[0]])).join('')}
   ${fileCols.filter(c => row && row[c]).map(c => `<button class="btn" type="button" data-act="file" data-path="${esc(row[c])}">Ouvrir la pièce jointe</button>`).join('')}
-  <div class="row-actions">${isNew ? '' : '<button class="btn danger" type="button" id="del">Supprimer</button>'}<button class="btn primary" type="submit">Enregistrer</button></div></form>${extra}`);
+  <div class="row-actions">${isNew ? '' : '<button class="btn danger" type="button" id="del">Supprimer</button>'}<button class="btn primary" type="submit">Enregistrer</button></div></form>${top ? '' : extra}`);
   const form = $('gform');
   const cur = form.querySelector('[name=currency]'), fxr = form.querySelector('[name=fx_rate]');
   if (cur && fxr) cur.addEventListener('change', () => { fxr.value = rate(cur.value); });
@@ -151,12 +152,19 @@ async function editById(table, id, after) { const sc = SCHEMAS[table]; const x =
 SCHEMAS.expenses.extra = async row => {
   const lines = await q(sb.from('expense_lines').select('*').eq('expense_id', row.id).order('created_at'));
   const det = sum(lines, l => l.amount_eur), rest = N(row.amount_eur) - det;
-  return `<div class="sub-section"><div class="head"><h3>Détail de cette transaction</h3><button class="btn sm" type="button" data-act="add" data-t="expense_lines" data-def="${J({ expense_id: row.id })}" data-back="exp:${row.id}">Ajouter une ligne</button></div>
+  const ex = lines.map(l => `${l.label} ${String(Math.round(N(l.amount_eur) * 100) / 100).replace('.', ',')}€`).join(', ');
+  return `<div class="sub-section splitbox"><div class="head"><h3>Répartir ce montant en mini-dépenses</h3></div>
+  <p class="muted">Écrivez simplement à quoi a servi l’argent, séparé par des virgules. Montants en € ou en roupies (150k, 2M), ou en % du total. « reste … » prend ce qui manque. Ex. : <code>ads 200, courses 150k, essence 50, nahed perso 100, reste courses</code></p>
+  <textarea id="splitIn" rows="2" data-total="${N(row.amount_eur)}" data-cur="${esc(row.currency)}" placeholder="ads 200, courses 150k, reste essence">${esc(ex)}</textarea>
+  <div id="splitPrev">${lines.length ? splitPreview(lines.map(l => ({ label: l.label, eur: N(l.amount_eur), ...lineMeta(l.label, l.category) })), N(row.amount_eur)) : splitPreview([], N(row.amount_eur))}</div>
+  <div class="inline"><button class="btn primary" type="button" data-act="splitsave" data-id="${row.id}">Enregistrer la répartition</button>${lines.length ? `<button class="btn" type="button" data-act="splitclear" data-id="${row.id}">Tout effacer</button>` : ''}</div></div>
+  <div class="sub-section"><div class="head"><h3>Détail de cette transaction</h3><button class="btn sm" type="button" data-act="add" data-t="expense_lines" data-def="${J({ expense_id: row.id })}" data-back="exp:${row.id}">Ajouter une ligne</button></div>
   <p class="muted">Utile pour un retrait Bourso, un paiement carte ou un retrait d’espèces qui a servi à plusieurs choses. Écrivez à quoi a servi l’argent : la différence non détaillée reste « à clarifier ».</p>
   <table><tbody>${lines.map(l => `<tr class="click" data-act="edit" data-t="expense_lines" data-id="${l.id}" data-back="exp:${row.id}"><td>${esc(l.label)}<div class="muted">${esc(l.category || '')}</div></td><td>${l.file_path ? pill('Justif.', 'good') : ''}</td><td class="n">${EUR(l.amount_eur)}</td></tr>`).join('')}
   <tr><td><b>Total détaillé</b></td><td></td><td class="n"><b>${EUR(det)}</b> / ${EUR(row.amount_eur)}</td></tr>
   ${lines.length ? `<tr><td>${Math.abs(rest) < 1 ? 'Tout est détaillé' : rest > 0 ? 'Reste à détailler' : 'Détail supérieur au montant'}</td><td></td><td class="n">${Math.abs(rest) < 1 ? pill('OK', 'good') : pill(EUR(rest), 'bad')}</td></tr>` : ''}</tbody></table></div>`;
 };
+SCHEMAS.expenses.extraTop = row => row.type === 'À clarifier' || row.category === 'À clarifier' || /bourso|retrait|carte|cash/i.test(`${row.description} ${row.paid_from}`);
 SCHEMAS.participant_files.afterSave = async rec => { if (rec.participant_id && DOC_TYPES.includes(rec.doc_type)) await q(sb.from('participant_documents').upsert({ participant_id: rec.participant_id, doc_type: rec.doc_type, received: true, received_at: today() }, { onConflict: 'participant_id,doc_type' })); };
 /* Fiche lead : inscrire comme participant */
 SCHEMAS.leads.extra = async row => `<div class="sub-section"><h3>Inscription</h3><p class="muted">Quand la personne a payé sa première tranche, créez sa fiche participant en un clic (les infos sont reprises).</p><button class="btn primary" type="button" data-act="convert" data-id="${row.id}">Inscrire comme participant</button></div>`;
@@ -169,8 +177,8 @@ async function loadData() {
     q(sb.from('expense_lines').select('*')), q(sb.from('edition_budget_lines').select('*')),
     q(sb.from('transfers').select('*').order('done_on', { ascending: false, nullsFirst: false })), q(sb.from('cash_counts').select('*').order('counted_on', { ascending: false })), q(sb.from('payment_schedule').select('*').order('due_on'))
   ]);
-  const pays = pays0.filter(x => x.kind !== 'Annulé'), exps = exps0.filter(x => !x.cancelled); S.cache.payments = pays; S.cache.expenses = exps;
-  return { eds: S.cache.editions, parts, pays, exps, lines, budget, transfers, counts, sched };
+  const pays = pays0.filter(x => x.kind !== 'Annulé'), exps = exps0.filter(x => !x.cancelled); const split = explode(exps, lines); S.cache.payments = pays; S.cache.expenses = exps;
+  return { eds: S.cache.editions, parts, pays, exps, split, lines, budget, transfers, counts, sched };
 }
 const INACTIVE = ['Exclu', 'Annulé'];
 function partBal(p, pays) {
@@ -189,7 +197,7 @@ function edStats(id, D) {
   const active = parts.filter(b => !INACTIVE.includes(b.p.status) && b.p.status !== 'Reporté');
   const reported = parts.filter(b => b.p.status === 'Reporté'), repIds = reported.map(b => b.p.id);
   const avoirs = sum(reported, b => b.net);
-  const pays = D.pays.filter(x => x.edition_id === id), exps = D.exps.filter(x => x.edition_id === id);
+  const pays = D.pays.filter(x => x.edition_id === id), exps = (D.split || D.exps).filter(x => x.edition_id === id), rawExps = D.exps.filter(x => x.edition_id === id);
   const enc = sum(pays.filter(x => !repIds.includes(x.participant_id)), x => x.eur_final);
   const attendu = sum(parts.filter(b => b.p.status !== 'Reporté'), b => b.due), reste = sum(parts, b => b.reste);
   const costs = exps.filter(x => x.type !== 'Frais fondateurs'), adv = exps.filter(x => x.type === 'Frais fondateurs');
@@ -203,7 +211,7 @@ function edStats(id, D) {
   const now = split(enc - couts - fraisChange);
   const P = postes(id, D); const coutsPrev = P.has ? Math.max(P.totPrev, couts) : couts;
   const prev = split(enc + reste - coutsPrev - fraisChange);
-  return { ed, parts, active, reported, avoirs, fraisChange, pays, exps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
+  return { ed, parts, active, reported, avoirs, fraisChange, pays, exps: rawExps, costs, adv, enc, attendu, reste, couts, avY, avN, avX, budget, coutsPrev, now, prev, pct };
 }
 /* Soldes par compte, dans la devise du compte (encaissements, dépenses, transferts) */
 function accountBalances(D, upto = null) {
@@ -249,7 +257,7 @@ function clarify(D, edId) {
   add('Encaissements sans compte', 'On ne sait pas sur quel compte l’argent est arrivé.', pays.filter(x => !x.account).map(x => ({ label: `${pn(x.participant_id)} · ${fmtD(x.paid_on)}`, amount: x.eur_final, act: `data-act="edit" data-t="payments" data-id="${x.id}"` })));
   add('Dinars pas encore convertis', `Calculés au taux fixe de ${NUM(fx())} TND pour 1 €. Indiquez les euros réellement obtenus après le change.`, pays.filter(x => x.currency !== 'EUR' && x.eur_received == null).map(x => ({ label: `${pn(x.participant_id)} · ${NUM(x.amount)} ${x.currency}`, amount: Math.abs(N(x.eur_final)), act: `data-act="edit" data-t="payments" data-id="${x.id}"` })));
   add('Dates approximatives', 'Encaissements dont la date ou le mois est estimé.', pays.filter(x => /approx/i.test(x.notes || '')).map(x => ({ label: `${pn(x.participant_id)} · ${fmtD(x.paid_on)}`, amount: x.eur_final, act: `data-act="edit" data-t="payments" data-id="${x.id}"` })), 'mute');
-  add('Dépenses marquées « à clarifier »', 'On ne sait pas encore à quoi elles correspondent.', exps.filter(x => x.type === 'À clarifier').map(x => ({ label: `${x.description || 'Sans description'} · ${fmtD(x.spent_on)}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'bad');
+  add('Dépenses marquées « à clarifier »', 'On ne sait pas encore à quoi elles correspondent. Ouvrez-les et écrivez le détail en une ligne (ex. « ads 200, courses 150, reste essence »).', exps.filter(x => (x.type === 'À clarifier' || x.category === 'À clarifier') && !linesOf(x.id).length).map(x => ({ label: `${x.description || 'Sans description'} · ${fmtD(x.spent_on)}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'bad');
   add('Transactions pas entièrement détaillées', 'Retraits, paiements Bourso ou carte : la partie non détaillée.', exps.filter(x => /bourso|retrait|carte|cash|espèce/i.test(`${x.description} ${x.paid_from} ${x.category}`) || linesOf(x.id).length).map(x => ({ x, rest: N(x.amount_eur) - sum(linesOf(x.id), l => l.amount_eur) })).filter(o => o.rest > 1).map(o => ({ label: `${o.x.description || o.x.category} · ${o.x.paid_from || ''} · ${fmtD(o.x.spent_on)}`, amount: o.rest, act: `data-act="edit" data-t="expenses" data-id="${o.x.id}"` })), 'bad');
   add('Dépenses sans justificatif', 'Ajoutez une photo ou une facture.', exps.filter(x => !x.receipt_path && x.type !== 'Frais fondateurs').map(x => ({ label: `${x.description || x.category} · ${fmtD(x.spent_on)}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })), 'mute');
   add('Avancé de sa poche, pas encore remboursé', 'La caisse The Circle doit cet argent à la personne.', exps.filter(x => x.paid_by && x.paid_by !== 'Caisse Circle' && !x.reimbursed).map(x => ({ label: `${x.paid_by} · ${x.description || x.category}`, amount: x.amount_eur, act: `data-act="edit" data-t="expenses" data-id="${x.id}"` })));
@@ -450,7 +458,7 @@ function budgetVsReal(s, D) {
 }
 const fraisOf = s => N(s.fraisChange);
 function postes(id, D) {
-  const costs = D.exps.filter(x => x.edition_id === id && x.type !== 'Frais fondateurs');
+  const costs = (D.split || D.exps).filter(x => x.edition_id === id && x.type !== 'Frais fondateurs');
   const real = {}; costs.forEach(x => real[x.category] = (real[x.category] || 0) + N(x.amount_eur));
   const lines = D.budget.filter(b => b.edition_id === id).sort((a, b) => (a.sort ?? 100) - (b.sort ?? 100) || b.amount_eur - a.amount_eur);
   const used = new Set();
@@ -512,6 +520,54 @@ async function weekDrawer(ed, i, a, b) {
   setTimeout(() => $('wkForm')?.d?.focus(), 250);
 }
 
+
+
+/* ---------- Dispersion d'une transaction en mini-dépenses ---------- */
+const FOUNDER_RE = /\b(perso|masrouf|pris par|retir[eé] par|pour (youssef|nahed|nehed))\b/i;
+function lineMeta(label, cat) {
+  const l = label || '';
+  const founder = /youssef|ysf/i.test(l) ? 'Youssef' : /nah?e?d|nehed/i.test(l) ? 'Nahed' : null;
+  if ((cat === 'Gain fondateurs') || (founder && FOUNDER_RE.test(l))) return { category: 'Gain fondateurs', type: 'Frais fondateurs', founder };
+  const c = cat || (CAT_KW.find(([, r]) => r.test(l)) || [null])[0];
+  return { category: c || 'À clarifier', type: !c || c === 'À clarifier' ? 'À clarifier' : c === 'Publicité' ? 'Marketing' : 'Coût édition', founder: null };
+}
+function explode(exps, lines) {
+  const by = {}; (lines || []).forEach(l => (by[l.expense_id] ||= []).push(l));
+  const out = [];
+  exps.forEach(x => {
+    const ls = by[x.id]; if (!ls || !ls.length) { out.push(x); return; }
+    ls.forEach(l => { const m = lineMeta(l.label, l.category); out.push({ ...x, _line: l.id, description: l.label, category: m.category, type: m.type, founder: m.founder || (m.type === 'Frais fondateurs' ? x.founder : null), amount_eur: N(l.amount_eur) }); });
+    const rest = N(x.amount_eur) - sum(ls, l => l.amount_eur);
+    if (rest > 0.5) out.push({ ...x, _line: 'rest', description: (x.description || '') + ' (non détaillé)', category: 'À clarifier', type: 'À clarifier', amount_eur: rest });
+  });
+  return out;
+}
+/* « ads 200, courses 150k, essence 50€, nahed perso 100, reste courses » → lignes */
+function parseSplit(text, total, cur0) {
+  const segs = text.split(/[,;\n+]|\bet\b/i).map(x => x.trim()).filter(Boolean);
+  const rows = []; let restSeg = null;
+  segs.forEach(sg => {
+    if (/\b(le )?reste\b/i.test(sg)) { restSeg = sg.replace(/\b(le )?reste( en| pour| :)?\b/i, '').trim() || 'reste'; return; }
+    const pc = sg.match(/(\d+(?:[.,]\d+)?)\s*%/);
+    let eur = null, label = sg;
+    if (pc) { eur = total * Number(pc[1].replace(',', '.')) / 100; label = sg.replace(pc[0], ''); }
+    else { const a = parseAmounts(sg)[0]; if (a) { const cur = a.cur || (a.mult || a.val >= 10000 ? 'IDR' : cur0 === 'TND' ? 'TND' : 'EUR'); eur = toEur(a.val, cur); label = sg.replace(a.text, ''); } }
+    label = label.replace(/\s+/g, ' ').trim() || 'Sans nom';
+    rows.push({ label: label[0].toUpperCase() + label.slice(1), eur });
+  });
+  const known = sum(rows.filter(r => r.eur != null), r => r.eur);
+  if (restSeg) rows.push({ label: restSeg[0].toUpperCase() + restSeg.slice(1), eur: null, isRest: true });
+  const open = rows.filter(r => r.eur == null), left = Math.max(total - known, 0);
+  open.forEach(r => { r.eur = left / open.length; if (!r.isRest) r.auto = true; });
+  rows.forEach(r => { r.eur = Math.round(N(r.eur) * 100) / 100; Object.assign(r, lineMeta(r.label)); });
+  return rows;
+}
+function splitPreview(rows, total) {
+  const done = sum(rows, r => r.eur), rest = total - done;
+  if (!rows.length) return '<span class="muted">Écrivez le détail ci-dessus, l’app répartit et classe tout seul.</span>';
+  return `<div class="splitprev">${rows.map(r => `<div class="spl"><span class="grow"><b>${esc(r.label)}</b> ${pill(r.type === 'Frais fondateurs' ? 'Avance sur gain' + (r.founder ? ' · ' + r.founder : '') : r.category, r.category === 'À clarifier' ? 'bad' : r.type === 'Frais fondateurs' ? 'warn' : 'mute')}${r.auto ? ' <small class="muted">montant réparti</small>' : ''}${r.isRest ? ' <small class="muted">le reste</small>' : ''}</span><b class="num">${EUR(r.eur)}</b></div>`).join('')}
+  <div class="spl tot"><span class="grow">${Math.abs(rest) < 1 ? '<span class="good-t">Tout est réparti ✓</span>' : rest > 0 ? `<span class="warn-t">Il reste ${EUR(rest)} non détaillés (ils resteront « à clarifier »)</span>` : `<span class="neg">Le détail dépasse le total de ${EUR(-rest)}</span>`}</span><b class="num">${EUR(done)} / ${EUR(total)}</b></div></div>`;
+}
 
 /* ---------- Échéancier des tranches ---------- */
 function schedOf(p, D) {
@@ -858,7 +914,7 @@ function expFeed(exps, D) {
     <div class="fi-date">${x.spent_on ? new Date(x.spent_on + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : 'sans date'}</div>
     <div class="grow"><div><b>${esc(x.description || x.category)}</b> ${x.type === 'Frais fondateurs' ? pill('Avance sur gain' + (x.founder ? ' · ' + x.founder : ''), 'warn') : x.type === 'À clarifier' ? pill('À clarifier', 'bad') : pill(x.category, 'mute')}</div>
     <div class="sub">${x.paid_from ? 'Compte : ' + esc(x.paid_from) : 'Compte non renseigné'}${x.paid_by && x.paid_by !== 'Caisse Circle' ? ` · avancé par ${esc(x.paid_by)}${x.reimbursed ? ' (remboursé)' : ' (à rembourser)'}` : ''}${x.notes ? ' · ' + esc(x.notes) : ''}</div>
-    ${lines.length ? `<div class="sub">Détail : ${lines.map(l => `${esc(l.label)} ${EUR(l.amount_eur)}`).join(' · ')}${rest > 1 ? ` · <span class="warn-t">${EUR(rest)} non détaillés</span>` : ''}</div>` : ''}</div>
+    ${lines.length ? `<div class="sub">Réparti : ${lines.map(l => `${esc(l.label)} ${EUR(l.amount_eur)}`).join(' · ')}${rest > 1 ? ` · <span class="warn-t">${EUR(rest)} non détaillés</span>` : ' ✓'}</div>` : (x.type === 'À clarifier' || x.category === 'À clarifier') ? '<div class="sub warn-t">Cliquez pour répartir ce montant (ads, courses, essence…)</div>' : ''}</div>
     <div class="fi-amt"><b class="num">${EUR(x.amount_eur)}</b>${x.currency !== 'EUR' ? `<div class="muted">${NUM(x.amount)} ${x.currency}</div>` : ''}${x.receipt_path ? pill('Justif.', 'good') : pill('Sans justif.', 'mute')}</div></button>`; }).join('')}</div>`;
 }
 function journalFeed(items) {
@@ -1080,6 +1136,18 @@ document.addEventListener('click', async e => {
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
     case 'qsave': quickSave(); break;
+    case 'splitsave': {
+      const ta = $('splitIn'), total = Number(ta.dataset.total), rows = parseSplit(ta.value, total, ta.dataset.cur);
+      if (sum(rows, r => r.eur) - total > 1) { toast('Le détail dépasse le total : corrigez avant d’enregistrer', true); break; }
+      const old = (await q(sb.from('expense_lines').select('id').eq('expense_id', d.id))).map(x => x.id);
+      if (old.length) await q(sb.from('expense_lines').delete().in('id', old));
+      if (rows.length) await q(sb.from('expense_lines').insert(rows.map(r => ({ expense_id: d.id, label: r.label, category: r.category, amount_eur: r.eur }))));
+      const full = Math.abs(sum(rows, r => r.eur) - total) < 1;
+      if (full) await q(sb.from('expenses').update({ type: 'Coût édition', category: rows.slice().sort((a, b) => b.eur - a.eur)[0].category === 'Gain fondateurs' ? 'Gain fondateurs' : rows.slice().sort((a, b) => b.eur - a.eur)[0].category }).eq('id', d.id).eq('type', 'À clarifier'));
+      toast(full ? `Réparti en ${rows.length} mini-dépenses ✓` : `Réparti en ${rows.length} lignes · le reste reste à clarifier`);
+      route(); editById('expenses', d.id); break;
+    }
+    case 'splitclear': { const old = (await q(sb.from('expense_lines').select('id').eq('expense_id', d.id))).map(x => x.id); if (old.length) await q(sb.from('expense_lines').delete().in('id', old)); toast('Répartition effacée'); route(); editById('expenses', d.id); break; }
     case 'mksched': { const p = (S.cache.participants || []).find(x => x.id === d.id) || await q(sb.from('participants').select('*').eq('id', d.id).single()); if (!S.cache.payments) await loadData(); schedForm(p); break; }
     case 'copyportal': { const i = $('portalUrl'); i.select(); try { await navigator.clipboard.writeText(i.value); } catch (_) { document.execCommand('copy'); } toast('Lien copié'); break; }
     case 'print': window.print(); break;
@@ -1145,7 +1213,7 @@ document.addEventListener('change', async e => {
   route();
 });
 let annT;
-document.addEventListener('input', e => { if (e.target.id === 'qIn') { $('qPrev').innerHTML = quickPreview(parseQuick(e.target.value)); return; } if (e.target.id === 'annQ') { annQ = e.target.value; clearTimeout(annT); annT = setTimeout(async () => { const pos = e.target.selectionStart; await route(); const el = $('annQ'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 250); } });
+document.addEventListener('input', e => { if (e.target.id === 'splitIn') { $('splitPrev').innerHTML = splitPreview(parseSplit(e.target.value, Number(e.target.dataset.total), e.target.dataset.cur), Number(e.target.dataset.total)); return; } if (e.target.id === 'qIn') { $('qPrev').innerHTML = quickPreview(parseQuick(e.target.value)); return; } if (e.target.id === 'annQ') { annQ = e.target.value; clearTimeout(annT); annT = setTimeout(async () => { const pos = e.target.selectionStart; await route(); const el = $('annQ'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 250); } });
 document.addEventListener('dragstart', e => { const c = e.target.closest('.lead'); if (c) e.dataTransfer.setData('text/plain', c.dataset.lead); });
 document.addEventListener('dragover', e => { const c = e.target.closest('.col'); if (c) { e.preventDefault(); c.classList.add('over'); } });
 document.addEventListener('dragleave', e => { const c = e.target.closest('.col'); if (c) c.classList.remove('over'); });
