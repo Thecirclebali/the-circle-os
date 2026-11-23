@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Mon espace · The Circle Bali</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Ccircle cx='17' cy='17' r='13' fill='none' stroke='%2317756D' stroke-width='3'/%3E%3Ccircle cx='17' cy='17' r='6' fill='none' stroke='%23D98E1F' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+body.portal{display:block;background:radial-gradient(circle at 10% 0%,var(--accent-soft),transparent 45%),radial-gradient(circle at 90% 100%,var(--sun-soft),transparent 40%),var(--bg);min-height:100%}
+.pwrap{max-width:720px;margin:0 auto;padding:28px 18px 60px;display:flex;flex-direction:column;gap:16px}
+.phero{display:flex;align-items:center;gap:14px}
+.phero h1{font-size:24px}.phero p{margin:2px 0 0;color:var(--muted)}
+.big{font-family:var(--display);font-size:30px;font-weight:600}
+.steps2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dz{border:2px dashed var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.dz.ok{border-style:solid;border-color:var(--good);background:var(--good-soft)}
+.dz b{font-size:14px}.dz small{color:var(--muted);font-size:12px}
+.dz label{cursor:pointer;color:var(--accent);font-weight:500;font-size:13px}
+.dz input{display:none}
+.sched .si{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line-2)}
+.sched .si:first-child{border-top:0}
+.foot{text-align:center;color:var(--muted);font-size:12.5px}
+@media (max-width:560px){.steps2{grid-template-columns:1fr}.big{font-size:26px}}
+</style>
+</head>
+<body class="portal">
+<div class="pwrap" id="app"><div class="card sk tall"><i></i><i></i><i></i></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="vendor-supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const C = window.CIRCLE_CONFIG, sb = supabase.createClient(C.supabaseUrl, C.supabaseKey);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const EUR = n => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(Number(n || 0))) + ' €';
+const fmtD = s => s ? new Date(s.slice(0, 10) + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function toast(t, err) { const el = $('toast'); el.textContent = t; el.style.background = err ? 'var(--bad)' : ''; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2800); }
+const token = location.hash.slice(1).trim();
+const DOCS = [['Passeport', 'Page photo, bien lisible'], ['Billets', 'Billet d’avion aller et retour'], ['Contrat', 'Contrat signé'], ['Assurance', 'Attestation d’assurance voyage'], ['Visa', 'Visa ou e-visa, si déjà fait'], ['Contact urgence', 'Facultatif si rempli plus bas']];
+async function load() {
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return $('app').innerHTML = '<div class="card"><h1>Lien incomplet</h1><p class="muted">Demandez à l’équipe The Circle de vous renvoyer votre lien personnel.</p></div>';
+  const { data, error } = await sb.rpc('portal_get', { t: token });
+  if (error || !data) return $('app').innerHTML = '<div class="card"><h1>Lien introuvable</h1><p class="muted">Ce lien n’est plus valable. Demandez à l’équipe The Circle de vous en renvoyer un.</p></div>';
+  render(data);
+}
+function render(d) {
+  const p = d.participant, e = d.edition || {};
+  const pays = d.payments || [], paid = pays.reduce((s, x) => s + Number(x.eur || 0), 0), price = Number(p.price_eur || 0), rest = Math.max(price - paid, 0), pct = price ? Math.min(paid / price, 1) : 1;
+  let cum = 0; const t = today();
+  const sched = (d.schedule || []).map(r => { const before = cum; cum += Number(r.amount_eur); const cov = Math.max(0, Math.min(Number(r.amount_eur), paid - before)); const left = Number(r.amount_eur) - cov; return { ...r, left, st: left < 1 ? ['Payée', 'good'] : r.due_on < t ? ['En retard', 'bad'] : cov > 0 ? ['Partielle', 'warn'] : ['À venir', 'mute'] }; });
+  const got = new Set([...(d.docs || []), ...(d.files || []).map(f => f.doc_type)]);
+  const first = p.full_name.split(' ')[0];
+  $('app').innerHTML = `
+  <div class="phero"><svg width="46" height="46" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="13" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="17" cy="17" r="6" fill="none" stroke="var(--sun)" stroke-width="2"/></svg><div><h1>Salut ${esc(first)} 👋</h1><p>${esc(e.skill || '')} · ${fmtD(e.start_date)} → ${fmtD(e.end_date)} · Bali</p></div></div>
+  <div class="card"><div class="head"><h2>Ton paiement</h2></div><div><span class="big">${EUR(paid)}</span> <span class="muted">payés sur ${EUR(price)}</span></div>
+  <div class="pbar ${pct >= .995 ? 'full' : ''}"><i style="width:${pct * 100}%"></i><span>${Math.round(pct * 100)} %</span></div>
+  <p class="muted">${rest > 1 ? `Il reste <b>${EUR(rest)}</b> à régler.` : 'Tout est réglé, merci ! ✅'}</p>
+  ${sched.length ? `<h3>Ton échéancier</h3><div class="sched">${sched.map(s => `<div class="si"><span class="grow">${esc(s.label || 'Tranche')} · ${fmtD(s.due_on)}</span><b class="num">${EUR(s.amount_eur)}</b><span class="pill ${s.st[1]}">${s.st[0]}</span></div>`).join('')}</div>` : ''}
+  ${pays.length ? `<details class="more-detail"><summary>Voir mes ${pays.length} paiement(s)</summary>${pays.map(x => `<div class="row">${fmtD(x.paid_on)} · ${new Intl.NumberFormat('fr-FR').format(x.amount)} ${esc(x.currency)}${x.kind === 'Remboursement' ? ' (remboursement)' : ''}</div>`).join('')}</details>` : ''}</div>
+  <div class="card"><div class="head"><h2>Tes documents</h2><span class="pill ${DOCS.slice(0, 3).every(x => got.has(x[0])) ? 'good' : 'warn'}">${DOCS.filter(x => got.has(x[0])).length} / ${DOCS.length}</span></div>
+  <p class="muted">Prends une photo ou choisis un fichier : il arrive directement chez l’équipe, en privé.</p>
+  <div class="steps2">${DOCS.map(([k, sub]) => `<div class="dz ${got.has(k) ? 'ok' : ''}"><b>${got.has(k) ? '✓ ' : ''}${esc(k)}</b><small>${esc(sub)}</small><label>${got.has(k) ? 'Remplacer' : 'Déposer'}<input type="file" accept="image/*,.pdf" data-doc="${esc(k)}"></label></div>`).join('')}</div></div>
+  <div class="card"><div class="head"><h2>Tes infos</h2></div><form class="form" id="info">
+  <div class="fwrap half"><label class="field">Téléphone / WhatsApp<input name="phone" value="${esc(p.phone || '')}"></label></div>
+  <div class="fwrap half"><label class="field">Instagram<input name="instagram" value="${esc(p.instagram || '')}" placeholder="@toncompte"></label></div>
+  <div class="fwrap half"><label class="field">Date de naissance<input type="date" name="birth" value="${esc(p.birth_date || '')}"></label></div>
+  <div class="fwrap full"><label class="field">Contact d’urgence (nom, lien, téléphone)<input name="emergency" value="${esc(p.emergency_contact || '')}" placeholder="Ex. Sami Ben Ali, frère, +216 …"></label></div>
+  <div class="fwrap full"><button class="btn primary" type="submit">Enregistrer</button></div></form></div>
+  ${p.referral_code ? `<div class="card"><div class="head"><h2>Ton code de parrainage</h2></div><p>Partage <code>${esc(p.referral_code)}</code> : chaque ami qui s’inscrit avec ton code a une réduction, et toi tu gagnes une récompense.</p></div>` : ''}
+  <p class="foot">The Circle Bali · espace privé de ${esc(p.full_name)} · ne partage pas ce lien</p>`;
+  document.querySelectorAll('[data-doc]').forEach(inp => inp.onchange = () => up(inp));
+  $('info').onsubmit = async ev => { ev.preventDefault(); const f = ev.target; const { error } = await sb.rpc('portal_update', { t: token, phone: f.phone.value, instagram: f.instagram.value, birth: f.birth.value || null, emergency: f.emergency.value }); toast(error ? 'Erreur, réessaie' : 'Infos enregistrées ✓', !!error); };
+}
+async function up(inp) {
+  const f = inp.files[0]; if (!f) return; if (f.size > 15e6) return toast('Fichier trop lourd (15 Mo max)', true);
+  toast('Envoi en cours…');
+  const path = `portal/${token}/${Date.now()}_${f.name.replace(/[^\w.-]/g, '_')}`;
+  const r1 = await sb.storage.from('documents').upload(path, f);
+  if (r1.error) return toast('Envoi impossible, réessaie', true);
+  const r2 = await sb.rpc('portal_add_file', { t: token, doc: inp.dataset.doc, path, fname: f.name });
+  if (r2.error || !r2.data) return toast('Envoi impossible, réessaie', true);
+  toast(`${inp.dataset.doc} envoyé ✓`); load();
+}
+load();
+</script>
+</body>
+</html>

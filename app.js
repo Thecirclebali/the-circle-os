@@ -164,12 +164,13 @@ SCHEMAS.leads.extra = async row => `<div class="sub-section"><h3>Inscription</h3
 /* ---------- Données & calculs financiers ---------- */
 async function loadData() {
   await ensureLookups();
-  const [parts, pays, exps, lines, budget, transfers, counts] = await Promise.all([
+  const [parts, pays0, exps0, lines, budget, transfers, counts, sched] = await Promise.all([
     load('participants', 'full_name', true), load('payments', 'paid_on'), load('expenses', 'spent_on'),
     q(sb.from('expense_lines').select('*')), q(sb.from('edition_budget_lines').select('*')),
-    q(sb.from('transfers').select('*').order('done_on', { ascending: false, nullsFirst: false })), q(sb.from('cash_counts').select('*').order('counted_on', { ascending: false }))
+    q(sb.from('transfers').select('*').order('done_on', { ascending: false, nullsFirst: false })), q(sb.from('cash_counts').select('*').order('counted_on', { ascending: false })), q(sb.from('payment_schedule').select('*').order('due_on'))
   ]);
-  return { eds: S.cache.editions, parts, pays, exps, lines, budget, transfers, counts };
+  const pays = pays0.filter(x => x.kind !== 'Annulé'), exps = exps0.filter(x => !x.cancelled); S.cache.payments = pays; S.cache.expenses = exps;
+  return { eds: S.cache.editions, parts, pays, exps, lines, budget, transfers, counts, sched };
 }
 const INACTIVE = ['Exclu', 'Annulé'];
 function partBal(p, pays) {
@@ -285,6 +286,7 @@ function gainTable(st, title = 'Calcul du gain') {
 
 /* ---------- Layout ---------- */
 const IC = d => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const portalUrl = p => `${location.origin}${location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')}/portal.html#${p.portal_token}`;
 const ICON = {
   accueil: IC('<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
   crm: IC('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>'),
@@ -297,6 +299,7 @@ const ICON = {
   documents: IC('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'),
   securite: IC('<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>'),
   pilotage: IC('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>'),
+  historique: IC('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   reglages: IC('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
   search: IC('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   plus: IC('<path d="M12 5v14M5 12h14"/>'),
@@ -306,7 +309,7 @@ const ICON = {
   menu: IC('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   whatsapp: IC('<path d="M20 11.6a8 8 0 0 1-11.8 7L4 20l1.4-4.1A8 8 0 1 1 20 11.6z"/><path d="M9 9.5c.3 1.6 1.9 3.6 3.6 4.3l1.2-1.1 1.7.8c-.2.9-1 1.6-2 1.5C10.8 14.8 8.6 12.6 8.4 10.9c-.1-1 .6-1.8 1.5-2l.8 1.7z"/>')
 };
-const NAV = [['', [['accueil', 'Accueil'], ['pilotage', 'Tâches & décisions']]], ['Personnes', [['crm', 'Prospects (CRM)'], ['annuaire', 'Annuaire'], ['participants', 'Participants'], ['alumni', 'Alumni & Circle Club']]], ['Bootcamps & argent', [['editions', 'Éditions'], ['finances', 'Finances']]], ['Organisation', [['partenaires', 'Partenaires'], ['documents', 'Documents'], ['securite', 'Sécurité'], ['reglages', 'Réglages']]]];
+const NAV = [['', [['accueil', 'Accueil'], ['pilotage', 'Tâches & décisions']]], ['Personnes', [['crm', 'Prospects (CRM)'], ['annuaire', 'Annuaire'], ['participants', 'Participants'], ['alumni', 'Alumni & Circle Club']]], ['Bootcamps & argent', [['editions', 'Éditions'], ['finances', 'Finances']]], ['Organisation', [['partenaires', 'Partenaires'], ['documents', 'Documents'], ['securite', 'Sécurité'], ['historique', 'Historique'], ['reglages', 'Réglages']]]];
 const VIEWS = [['accueil', 'Accueil'], ['crm', 'CRM · prospects'], ['annuaire', 'Annuaire'], ['editions', 'Éditions'], ['participants', 'Participants'], ['finances', 'Finances'], ['alumni', 'Alumni & parrainage'], ['partenaires', 'Partenaires'], ['documents', 'Documents'], ['securite', 'Sécurité'], ['pilotage', 'Tâches & décisions'], ['reglages', 'Réglages']];
 function shell() {
   $('root').innerHTML = `<aside id="side">
@@ -509,6 +512,139 @@ async function weekDrawer(ed, i, a, b) {
   setTimeout(() => $('wkForm')?.d?.focus(), 250);
 }
 
+
+/* ---------- Échéancier des tranches ---------- */
+function schedOf(p, D) {
+  const rows = (D.sched || []).filter(x => x.participant_id === p.id).sort((a, b) => a.due_on.localeCompare(b.due_on));
+  const b = partBal(p, D.pays); let cum = 0; const t = today();
+  const items = rows.map(r => { const before = cum; cum += N(r.amount_eur); const covered = Math.max(0, Math.min(N(r.amount_eur), b.net - before)); const rest = N(r.amount_eur) - covered; return { ...r, covered, rest, st: rest < 1 ? 'Payée' : r.due_on < t ? 'En retard' : covered > 0 ? 'Partielle' : 'À venir' }; });
+  const late = sum(items.filter(i => i.st === 'En retard'), i => i.rest);
+  return { items, late, has: rows.length > 0, b };
+}
+function allSchedules(D) {
+  return D.parts.filter(p => !INACTIVE.includes(p.status) && p.status !== 'Reporté').map(p => ({ p, s: schedOf(p, D) })).filter(x => x.s.has);
+}
+const relanceMsg = (p, amount, due) => `Salut ${p.full_name.split(' ')[0]} ! Petit rappel The Circle : la tranche de ${EUR(amount)} prévue le ${fmtD(due)} n’est pas encore arrivée. Tu nous dis quand tu peux l’envoyer ? Merci 🙏`;
+function schedSection(p, D, back) {
+  const s = schedOf(p, D);
+  const cls = { 'Payée': 'good', 'En retard': 'bad', 'Partielle': 'warn', 'À venir': 'mute' };
+  return `<div class="sub-section"><div class="head"><h3>Échéancier</h3>${s.late ? pill(`${EUR(s.late)} en retard`, 'bad') : s.has ? pill('à jour', 'good') : ''}<button class="btn sm" type="button" data-act="mksched" data-id="${p.id}">${s.has ? 'Refaire' : 'Créer l’échéancier'}</button></div>
+  ${s.has ? `<div class="sched">${s.items.map(i => `<div class="si ${cls[i.st]}"><span class="sd">${fmtD(i.due_on)}</span><span class="grow">${esc(i.label || 'Tranche')}</span><b class="num">${EUR(i.amount_eur)}</b>${pill(i.st, cls[i.st])}${i.st === 'En retard' && p.phone ? `<a class="btn sm" target="_blank" rel="noopener" href="${wa(p.phone)}?text=${encodeURIComponent(relanceMsg(p, i.rest, i.due_on))}">Relancer</a>` : ''}</div>`).join('')}</div>` : '<p class="muted">Pas encore d’échéancier : fixez les dates et montants prévus, l’app dira qui est en retard.</p>'}</div>`;
+}
+function schedForm(p) {
+  const b = partBal(p, S.cache.payments || []);
+  const d1 = new Date(); d1.setDate(1); d1.setMonth(d1.getMonth() + 1);
+  openDrawer(`${drawerHead('Échéancier · ' + esc(p.full_name))}
+  <p class="muted">Prix total ${EUR(p.price_eur)} · déjà payé ${EUR(b.net)}. L’app répartit le prix total en tranches égales (les paiements déjà reçus couvrent les premières).</p>
+  <form class="form" id="schForm"><div class="fwrap half"><label class="field">Nombre de tranches<input type="number" name="n" min="1" max="12" value="3" required></label></div>
+  <div class="fwrap half"><label class="field">Tous les combien de mois<input type="number" name="every" min="1" max="6" value="1" required></label></div>
+  <div class="fwrap half"><label class="field">Date de la 1re tranche<input type="date" name="d" value="${p.created_at ? p.created_at.slice(0, 10) : today()}" required></label></div>
+  <div class="fwrap half"><label class="field">Montant total (€)<input type="number" step="any" name="tot" value="${N(p.price_eur)}" required></label></div>
+  <div class="row-actions"><button class="btn primary" type="submit">Créer l’échéancier</button></div></form>`);
+  $('schForm').onsubmit = async ev => {
+    ev.preventDefault(); const f = ev.target; const n = Number(f.n.value), every = Number(f.every.value), tot = Number(f.tot.value);
+    const old = (await q(sb.from('payment_schedule').select('id').eq('participant_id', p.id))).map(x => x.id);
+    if (old.length) await q(sb.from('payment_schedule').delete().in('id', old));
+    const base = Math.floor(tot / n * 100) / 100, rows = [];
+    for (let i = 0; i < n; i++) { const d = new Date(f.d.value + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + i * every); rows.push({ participant_id: p.id, due_on: d.toISOString().slice(0, 10), amount_eur: i === n - 1 ? Math.round((tot - base * (n - 1)) * 100) / 100 : base, label: `Tranche ${i + 1}/${n}` }); }
+    await q(sb.from('payment_schedule').insert(rows)); toast('Échéancier créé'); route(); participantDetail(p.id);
+  };
+}
+function echeancesCard(D, edId) {
+  const t = today(), m0 = t.slice(0, 7), m1 = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 7); })();
+  const all = allSchedules(D).filter(x => !edId || x.p.edition_id === edId);
+  const items = all.flatMap(x => x.s.items.filter(i => i.rest > 1).map(i => ({ ...i, p: x.p })));
+  const late = items.filter(i => i.st === 'En retard'), now = items.filter(i => i.st !== 'En retard' && i.due_on.slice(0, 7) === m0), next = items.filter(i => i.due_on.slice(0, 7) === m1);
+  const noSched = D.parts.filter(p => (!edId || p.edition_id === edId) && !INACTIVE.includes(p.status) && p.status !== 'Reporté' && partBal(p, D.pays).reste > 1 && !all.some(x => x.p.id === p.id));
+  const li = i => `<div class="row"><div class="grow click" data-act="part" data-id="${i.p.id}"><b>${esc(i.p.full_name)}</b><div class="sub">${esc(i.label || '')} · prévue le ${fmtD(i.due_on)}</div></div><b class="num">${EUR(i.rest)}</b>${i.st === 'En retard' && i.p.phone ? `<a class="btn sm" target="_blank" rel="noopener" href="${wa(i.p.phone)}?text=${encodeURIComponent(relanceMsg(i.p, i.rest, i.due_on))}">Relancer</a>` : ''}</div>`;
+  return `<div class="card"><div class="head"><h2>Échéances des participants</h2></div><div class="grid g3 inner">${kpi('En retard', EUR(sum(late, i => i.rest)), `${late.length} tranche(s)`)}${kpi('Attendu ce mois-ci', EUR(sum(now, i => i.rest)), `${now.length} tranche(s)`)}${kpi('Le mois prochain', EUR(sum(next, i => i.rest)), `${next.length} tranche(s)`)}</div>
+  ${late.length ? `<h3 class="neg">En retard</h3><div class="list">${late.map(li).join('')}</div>` : ''}${now.length ? `<h3>Ce mois-ci</h3><div class="list">${now.map(li).join('')}</div>` : ''}
+  ${noSched.length ? `<p class="muted">Sans échéancier mais pas tout payé : ${noSched.map(p => `<a href="#" data-act="part" data-id="${p.id}">${esc(p.full_name)}</a>`).join(', ')}. Ouvrez la fiche → « Créer l’échéancier ».</p>` : ''}</div>`;
+}
+
+/* ---------- Trésorerie à venir ---------- */
+function tresorerie(D) {
+  const t = today(), mKey = d => (d && d > t ? d : t).slice(0, 7);
+  const months = []; const d0 = new Date(); d0.setDate(1); for (let i = 0; i < 7; i++) { const d = new Date(d0); d.setMonth(d0.getMonth() + i); months.push(d.toISOString().slice(0, 7)); }
+  const M = Object.fromEntries(months.map(m => [m, { m, inn: 0, out: 0, inD: [], outD: [] }]));
+  const put = (m, k, v, label) => { const x = M[m] || (m < months[0] ? M[months[0]] : null); if (!x || v < 1) return; x[k] += v; x[k === 'inn' ? 'inD' : 'outD'].push(`${label} ${EUR(v)}`); };
+  const all = allSchedules(D);
+  all.forEach(({ p, s }) => s.items.filter(i => i.rest > 1).forEach(i => put(mKey(i.due_on), 'inn', i.rest, p.full_name.split(' ')[0])));
+  D.parts.filter(p => !INACTIVE.includes(p.status) && p.status !== 'Reporté' && !all.some(x => x.p.id === p.id)).forEach(p => { const b = partBal(p, D.pays); if (b.reste > 1) { const e = D.eds.find(x => x.id === p.edition_id); put(mKey(e?.start_date), 'inn', b.reste, p.full_name.split(' ')[0]); } });
+  D.eds.filter(e => !e.hidden && !isEnded(e)).forEach(e => postes(e.id, D).rows.filter(r => !r.l.paid).forEach(r => { const left = Math.max(r.plan - r.real, 0); put(mKey(r.l.due_date || e.start_date), 'out', left, `${r.l.category} (${e.skill.slice(0, 4)}. ${fmtD(e.start_date).split(' ').slice(1).join(' ')})`); }));
+  const start = sum(accountBalances(D), a => a.balEur);
+  let cash = start; const rows = months.map(m => { const x = M[m]; cash += x.inn - x.out; return { ...x, cash }; });
+  const max = Math.max(...rows.map(r => Math.max(r.inn, r.out, Math.abs(r.cash))), 1);
+  const W = 760, H = 220, bw = W / rows.length, y = v => H / 2 - v / max * (H / 2 - 16);
+  const svg = `<svg class="chart" viewBox="0 0 ${W} ${H + 24}" role="img" aria-label="Trésorerie prévue par mois"><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" stroke="var(--line)"/>${rows.map((r, i) => `<rect x="${i * bw + bw * .18}" y="${y(r.inn)}" width="${bw * .28}" height="${H / 2 - y(r.inn)}" rx="4" fill="var(--good)" opacity=".85"><title>Entrées ${EUR(r.inn)}</title></rect><rect x="${i * bw + bw * .5}" y="${H / 2}" width="${bw * .28}" height="${H / 2 - y(r.out)}" rx="4" fill="var(--bad)" opacity=".8"><title>Sorties ${EUR(r.out)}</title></rect><text x="${i * bw + bw / 2}" y="${H + 18}" font-size="12" text-anchor="middle" fill="var(--muted)">${new Date(r.m + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })}</text>`).join('')}<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${rows.map((r, i) => `${i * bw + bw / 2},${y(r.cash)}`).join(' ')}"/>${rows.map((r, i) => `<circle cx="${i * bw + bw / 2}" cy="${y(r.cash)}" r="4" fill="${r.cash < 0 ? 'var(--bad)' : 'var(--accent)'}"><title>Trésorerie fin de mois ${EUR(r.cash)}</title></circle>`).join('')}</svg>`;
+  const neg = rows.find(r => r.cash < 0);
+  return `<div class="grid g4">${kpi('Trésorerie aujourd’hui', EUR(start), 'somme de tous les comptes (taux de référence)')}${kpi('Entrées attendues', EUR(sum(rows, r => r.inn)), '7 prochains mois')}${kpi('Sorties prévues', EUR(sum(rows, r => r.out)), 'postes fixes non payés')}${kpi('Dans 7 mois', EUR(rows[rows.length - 1].cash), neg ? `⚠ négatif en ${new Date(neg.m + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long' })}` : 'jamais négatif', neg ? '' : '')}</div>
+  ${neg ? `<div class="msg err">Attention : la trésorerie passe sous zéro en ${new Date(neg.m + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}. Il faudra faire rentrer des paiements avant, ou décaler une sortie.</div>` : ''}
+  <div class="card"><div class="head"><h2>Mois par mois</h2><span class="muted">vert = entrées attendues · rouge = sorties prévues · ligne = argent en fin de mois</span></div>${svg}
+  <div class="table-wrap"><table><thead><tr><th>Mois</th><th class="n">Entrées</th><th class="n">Sorties</th><th class="n">Fin de mois</th><th>Détail</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${new Date(r.m + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</b></td><td class="n good-t">${r.inn ? '+' + EUR(r.inn) : '—'}</td><td class="n neg">${r.out ? '−' + EUR(r.out) : '—'}</td><td class="n"><b class="${r.cash < 0 ? 'neg' : ''}">${EUR(r.cash)}</b></td><td class="muted">${esc([...r.inD, ...r.outD].join(' · '))}</td></tr>`).join('')}</tbody></table></div>
+  <p class="muted">Entrées : tranches non payées de l’échéancier (ou le reste dû au début de l’édition si pas d’échéancier). Sorties : postes fixes non cochés des éditions à venir, au mois « à payer avant le » du poste, sinon au mois de début de l’édition. Le point de départ dépend de la justesse des comptes (onglet Comptes).</p></div>`;
+}
+
+/* ---------- Rappels du jour ---------- */
+function rappels(D, leads, tasks) {
+  const t = today(), in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10), in15 = new Date(Date.now() + 15 * 864e5).toISOString().slice(0, 10);
+  const R = [];
+  allSchedules(D).forEach(({ p, s }) => s.items.filter(i => i.st === 'En retard').forEach(i => R.push({ k: 'bad', t: `Tranche en retard : ${p.full_name}`, s: `${EUR(i.rest)} prévus le ${fmtD(i.due_on)}`, act: `data-act="part" data-id="${p.id}"` })));
+  allSchedules(D).forEach(({ p, s }) => s.items.filter(i => i.rest > 1 && i.due_on >= t && i.due_on <= in7).forEach(i => R.push({ k: 'warn', t: `Tranche attendue : ${p.full_name}`, s: `${EUR(i.rest)} le ${fmtD(i.due_on)}`, act: `data-act="part" data-id="${p.id}"` })));
+  D.eds.filter(e => !e.hidden && !isEnded(e)).forEach(e => postes(e.id, D).rows.filter(r => !r.l.paid && r.l.due_date && r.l.due_date <= in7).forEach(r => R.push({ k: r.l.due_date < t ? 'bad' : 'warn', t: `À payer : ${r.l.category} (${e.skill})`, s: `${EUR(Math.max(r.plan - r.real, 0))} avant le ${fmtD(r.l.due_date)}`, act: `data-act="go" data-href="#edition/${e.id}"` })));
+  leads.filter(l => l.next_action_date && l.next_action_date <= t).forEach(l => R.push({ k: l.next_action_date < t ? 'bad' : 'warn', t: `Relancer ${l.full_name}`, s: `${l.next_action || 'prospect'} · ${fmtD(l.next_action_date)}`, act: `data-act="edit" data-t="leads" data-id="${l.id}"` }));
+  tasks.filter(x => x.due_date && x.due_date <= t).forEach(x => R.push({ k: x.due_date < t ? 'bad' : 'warn', t: x.title, s: `${x.owner || ''} · ${fmtD(x.due_date)}`, act: `data-act="edit" data-t="tasks" data-id="${x.id}"` }));
+  const soon = D.eds.filter(e => e.start_date && e.start_date >= t && e.start_date <= in15);
+  soon.forEach(e => { const KEY = ['Contrat', 'Passeport', 'Visa', 'Assurance', 'Billets']; R.push({ k: 'warn', t: `${e.skill} commence le ${fmtD(e.start_date)}`, s: `vérifier les dossiers : ${KEY.join(', ')}`, act: `data-act="go" data-href="#edition/${e.id}"` }); });
+  D.parts.filter(p => isEnded(D.eds.find(e => e.id === p.edition_id)) && !INACTIVE.includes(p.status) && p.next_followup && p.next_followup <= t).slice(0, 5).forEach(p => R.push({ k: 'mute', t: `Alumni à recontacter : ${p.full_name}`, s: `relance prévue le ${fmtD(p.next_followup)}`, act: `data-act="part" data-id="${p.id}"` }));
+  return R;
+}
+
+/* ---------- Bilan d'édition ---------- */
+function bilanHtml(id, D, journal, incidents) {
+  const s = edStats(id, D), e = s.ed, P = postes(id, D);
+  const cmp = D.eds.filter(x => !x.hidden && (x.status === 'Terminée' || x.status === 'En cours' || x.id === id)).map(x => { const y = edStats(x.id, D); return { x, y, cpp: y.couts / (y.active.length || 1), avg: y.active.length ? y.attendu / y.active.length : 0 }; });
+  const kinds = {}; journal.forEach(j => (kinds[j.kind] ||= []).push(j));
+  const cats = {}; s.costs.forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
+  return `<div class="bilan"><div class="card"><div class="head"><h2>Bilan · ${esc(e.skill)} · ${fmtD(e.start_date)} → ${fmtD(e.end_date)}</h2><button class="btn sm primary noprint" type="button" data-act="print">Imprimer / PDF</button></div>
+  <div class="grid g4 inner">${kpi('Participants', `${s.active.length} / ${e.capacity}`, `remplissage ${Math.round(s.active.length / (e.capacity || 12) * 100)} %`)}${kpi('Encaissé', EUR(s.enc), `prix moyen ${EUR(s.active.length ? s.attendu / s.active.length : 0)}`)}${kpi('Dépenses', EUR(s.couts), `${EUR(s.couts / (s.active.length || 1))} par participant`)}${kpi('Gain chacun', EUR(s.now.part), `résultat ${EUR(s.now.res)} · investissement ${EUR(s.now.invest)}`)}</div></div>
+  <div class="split"><div class="card"><div class="head"><h2>Comparaison avec les autres éditions</h2></div><div class="table-wrap"><table><thead><tr><th>Édition</th><th class="n">Part.</th><th class="n">Prix moyen</th><th class="n">Encaissé</th><th class="n">Dépenses</th><th class="n">Coût / part.</th><th class="n">Résultat</th><th class="n">Gain chacun</th></tr></thead><tbody>${cmp.map(c => `<tr class="${c.x.id === id ? 'hl' : ''}"><td><b>${esc(c.x.skill)}</b><div class="muted">${fmtD(c.x.start_date)}</div></td><td class="n">${c.y.active.length}</td><td class="n">${EUR(c.avg)}</td><td class="n">${EUR(c.y.enc)}</td><td class="n">${EUR(c.y.couts)}</td><td class="n">${EUR(c.cpp)}</td><td class="n ${c.y.now.res < 0 ? 'neg' : ''}">${EUR(c.y.now.res)}</td><td class="n">${EUR(c.y.now.part)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="head"><h2>Coûts : prévu et réel</h2></div><div class="table-wrap"><table><tbody>${P.rows.map(r => `<tr><td>${esc(r.l.category)}</td><td class="n">${EUR(r.plan)}</td><td class="n">${EUR(r.real)}</td><td class="n ${r.real > r.plan ? 'neg' : 'good-t'}">${(r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan)}</td></tr>`).join('') || Object.entries(cats).map(([k, v]) => `<tr><td>${esc(k)}</td><td></td><td class="n">${EUR(v)}</td><td></td></tr>`).join('')}</tbody></table></div></div>
+  <div><div class="card"><div class="head"><h2>Ce qu’on retient</h2></div>${['Bonne idée', 'Problème', 'Retour participant', 'Changement', 'Remarque'].filter(k => kinds[k]).map(k => `<h3>${k}s</h3><ul class="steps">${kinds[k].map(j => `<li><b>${esc(j.title)}</b>${j.body ? ' : ' + esc(j.body) : ''}</li>`).join('')}</ul>`).join('') || '<p class="muted">Rien d’écrit dans le journal. Ajoutez remarques, problèmes et retours au fil de l’édition : ils apparaîtront ici.</p>'}</div>
+  <div class="card"><div class="head"><h2>Contenu filmé</h2></div>${(kinds['Contenu filmé'] || []).map(j => `<div class="row">${esc(j.title)}${j.link_url ? ` · <a href="${esc(j.link_url)}" target="_blank" rel="noopener">lien</a>` : ''}</div>`).join('') || '<p class="muted">Aucun contenu noté.</p>'}</div>
+  <div class="card"><div class="head"><h2>Incidents</h2></div>${incidents.map(x => `<p><b>${esc(x.type)}</b> · ${fmtD(x.occurred_on)} : ${esc(x.decision || x.description)}</p>`).join('') || '<p class="muted">Aucun incident.</p>'}</div></div></div></div>`;
+}
+
+/* ---------- Historique & export ---------- */
+const TBL = { participants: 'Participant', payments: 'Encaissement', expenses: 'Dépense', edition_budget_lines: 'Poste fixe', transfers: 'Transfert', leads: 'Prospect', editions: 'Édition', incidents: 'Incident', referral_rewards: 'Parrainage', settings: 'Réglage', accounts: 'Compte', payment_schedule: 'Échéance', partners: 'Partenaire', cash_counts: 'Comptage caisse' };
+const SKIP = ['created_at', 'updated_at', 'amount_eur', 'eur_final', 'referral_code', 'portal_token'];
+function auditLabel(a) {
+  const r = a.new || a.old || {};
+  const name = r.full_name || r.description || r.category || r.title || r.name || r.label || r.key || r.kind || '';
+  let ch = '';
+  if (a.action === 'UPDATE' && a.old && a.new) ch = Object.keys(a.new).filter(k => !SKIP.includes(k) && JSON.stringify(a.new[k]) !== JSON.stringify(a.old[k])).slice(0, 4).map(k => `${k} : ${a.old[k] ?? '—'} → ${a.new[k] ?? '—'}`).join(' · ');
+  else if (r.amount != null) ch = `${NUM(r.amount)} ${r.currency || ''}`; else if (r.amount_eur != null) ch = EUR(r.amount_eur);
+  return { name, ch };
+}
+const historiqueView = async () => {
+  setHead('Historique', 'Qui a modifié quoi et quand. Rien ne peut être effacé de cet historique.');
+  const [rows, team] = await Promise.all([q(sb.from('audit_log').select('*').order('at', { ascending: false }).limit(300)), q(sb.from('team_members').select('user_id,display_name'))]);
+  const who = id => team.find(m => m.user_id === id)?.display_name || (id ? 'Compte inconnu' : 'Claude / système');
+  const act = { INSERT: ['Ajout', 'good'], UPDATE: ['Modif.', 'warn'], DELETE: ['Suppression', 'bad'] };
+  let day = '';
+  return `<div class="card"><div class="feed">${rows.map(a => { const { name, ch } = auditLabel(a); const d = a.at.slice(0, 10); const head = d !== day ? `<div class="pal-g">${new Date(a.at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : ''; day = d; return `${head}<div class="feed-item"><div class="fi-date">${new Date(a.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div><div class="grow"><div>${pill(act[a.action][0], act[a.action][1])} <b>${esc(TBL[a.tbl] || a.tbl)}</b> · ${esc(name)}</div>${ch ? `<div class="sub">${esc(ch)}</div>` : ''}</div><div class="fi-amt"><span class="pill mute">${esc(who(a.user_id))}</span></div></div>`; }).join('') || '<div class="empty-state">Rien pour l’instant : chaque ajout, modification ou suppression apparaîtra ici.</div>'}</div></div>`;
+};
+async function exportAll(fmt) {
+  const tables = ['editions', 'participants', 'payments', 'payment_schedule', 'expenses', 'expense_lines', 'edition_budget_lines', 'transfers', 'cash_counts', 'accounts', 'leads', 'partners', 'documents', 'participant_documents', 'participant_files', 'incidents', 'edition_journal', 'referral_rewards', 'club_events', 'tasks', 'decisions', 'settings'];
+  toast('Export en cours…');
+  const out = {}; for (const t of tables) out[t] = await q(sb.from(t).select('*'));
+  const stamp = today();
+  const dl = (name, text, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+  if (fmt === 'json') dl(`the-circle-sauvegarde-${stamp}.json`, JSON.stringify({ exported_at: new Date().toISOString(), tables: out }, null, 1), 'application/json');
+  else { const csv = rows => { if (!rows.length) return ''; const cols = Object.keys(rows[0]); const c = v => v == null ? '' : /[;"\n]/.test(String(typeof v === 'object' ? JSON.stringify(v) : v)) ? `"${String(typeof v === 'object' ? JSON.stringify(v) : v).replace(/"/g, '""')}"` : String(v); return '﻿' + cols.join(';') + '\n' + rows.map(r => cols.map(k => c(r[k])).join(';')).join('\n'); }; for (const t of ['participants', 'payments', 'expenses', 'edition_budget_lines', 'transfers']) dl(`${t}-${stamp}.csv`, csv(out[t]), 'text/csv'); }
+  toast('Sauvegarde téléchargée');
+}
+
 /* ---------- Comptes & circuit de l'argent ---------- */
 function comptesHtml(D) {
   const acc = accountBalances(D);
@@ -582,6 +718,7 @@ async function importGo() {
 
 /* ---------- Vues ---------- */
 const V = {};
+V.historique = () => historiqueView();
 
 V.accueil = async () => {
   setHead(`Bonjour ${S.member?.display_name || ''}`, new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
@@ -593,7 +730,9 @@ V.accueil = async () => {
   const lateLeads = leads.filter(l => l.next_action_date && l.next_action_date < t), lateTasks = tasks.filter(x => x.due_date && x.due_date < t);
   const nextSale = eds.filter(e => e.start_date > t).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const clar = clarify(D);
-  return `<div class="grid g4">
+  const RAP = rappels(D, leads, tasks);
+  return `<div class="card rappels"><div class="head"><h2>À faire aujourd’hui</h2>${pill(RAP.length ? `${RAP.length} rappel(s)` : 'rien d’urgent', RAP.some(r => r.k === 'bad') ? 'bad' : RAP.length ? 'warn' : 'good')}</div>${RAP.length ? `<div class="rlist">${RAP.slice(0, 12).map(r => `<button type="button" class="rp ${r.k}" ${r.act}><span class="stripe ${r.k}"></span><span class="grow"><b>${esc(r.t)}</b><small>${esc(r.s)}</small></span></button>`).join('')}</div>${RAP.length > 12 ? `<p class="muted">+ ${RAP.length - 12} autres</p>` : ''}` : '<p class="muted">Aucune tranche en retard, aucun paiement urgent, aucune relance due. 🌴</p>'}</div>
+  <div class="grid g4">
     ${cur ? kpi(cur.ed.status === 'En cours' ? 'Édition en cours' : 'Prochaine édition', esc(cur.ed.skill), `${fmtD(cur.ed.start_date)} → ${fmtD(cur.ed.end_date)}`) : kpi('Édition', '—', 'Aucune')}
     ${kpi('Reste à encaisser', EUR(rest), 'Toutes éditions')}
     ${kpi('Prospects ouverts', leads.length, `${lateLeads.length} relance(s) en retard`)}
@@ -681,7 +820,7 @@ V.edition = async id => {
   const [journal, incidents] = await Promise.all([q(sb.from('edition_journal').select('*').eq('edition_id', id).order('happened_on', { ascending: false })), q(sb.from('incidents').select('*').eq('edition_id', id).order('occurred_on', { ascending: false }))]);
   const coach = S.cache.partners.find(p => p.id === e.coach_id);
   setHead(`${e.skill} · ${fmtD(e.start_date)}`, `${fmtD(e.start_date)} → ${fmtD(e.end_date)}${coach ? ' · coach : ' + coach.name : ''} · ${e.status}`, `<button class="btn" type="button" data-act="edit" data-t="editions" data-id="${id}">Modifier l’édition</button>`, `<a href="#editions">Éditions</a> / ${esc(e.id)}`);
-  const tabs = [['resume', 'Résumé'], ['participants', `Participants (${s.parts.length})`], ['entrees', `Entrées (${s.pays.length})`], ['depenses', `Dépenses (${s.exps.length})`], ['journal', `Journal (${journal.length})`], ['incidents', `Incidents (${incidents.length})`], ['budget', 'Coûts fixes']];
+  const tabs = [['resume', 'Résumé'], ['participants', `Participants (${s.parts.length})`], ['entrees', `Entrées (${s.pays.length})`], ['depenses', `Dépenses (${s.exps.length})`], ['journal', `Journal (${journal.length})`], ['incidents', `Incidents (${incidents.length})`], ['bilan', 'Bilan'], ['budget', 'Coûts fixes']];
   const pn = pid => D.parts.find(p => p.id === pid)?.full_name || '—';
   let body = '';
   if (edTab === 'resume') {
@@ -692,9 +831,10 @@ V.edition = async id => {
     <div class="head" style="margin-top:12px"><h2>Dernières notes</h2><button class="btn sm" type="button" data-act="tab" data-v="journal">Tout le journal</button></div>${journalFeed(journal.slice(0, 4))}</div></div>`;
   }
   if (edTab === 'participants') body = `<div class="card"><div class="head"><h2>Participants</h2><button class="btn primary sm" type="button" data-act="add" data-t="participants" data-def="${J({ edition_id: id, status: 'Confirmé', pay_currency: 'TND' })}">+ Participant</button></div>${await partTable(s.parts)}</div>`;
-  if (edTab === 'entrees') body = `<div class="card"><div class="head"><h2>Ce que chacun doit payer</h2></div>${payBars(s.parts)}</div><div class="card"><div class="head"><h2>Tous les encaissements en détail</h2><button class="btn primary sm" type="button" data-act="add" data-t="payments" data-def="paydef">+ Encaissement</button></div>${payTable(s.pays, pn)}</div>`;
+  if (edTab === 'entrees') body = `${echeancesCard(D, id)}<div class="card"><div class="head"><h2>Ce que chacun doit payer</h2></div>${payBars(s.parts)}</div><div class="card"><div class="head"><h2>Tous les encaissements en détail</h2><button class="btn primary sm" type="button" data-act="add" data-t="payments" data-def="paydef">+ Encaissement</button></div>${payTable(s.pays, pn)}</div>`;
   if (edTab === 'depenses') body = `${quickBar(id)}${budgetVsReal(s, D)}<div class="split"><div class="card"><div class="head"><h2>Journal des dépenses</h2><button class="btn primary sm" type="button" data-act="add" data-t="expenses" data-def="expdef">+ Dépense détaillée</button></div>${expFeed(s.exps, D)}</div><div>${owesBox(D, id)}${envelope(s)}</div></div>`;
   if (edTab === 'journal') body = `<div class="card"><div class="head"><h2>Journal de l’édition</h2><button class="btn primary sm" type="button" data-act="add" data-t="edition_journal" data-def="jdef">+ Note</button></div><p class="muted">Remarques, problèmes, contenu filmé (avec le lien Drive), changements, retours des participants.</p>${journalFeed(journal)}</div>`;
+  if (edTab === 'bilan') body = bilanHtml(id, D, journal, incidents);
   if (edTab === 'incidents') body = `<div class="card"><div class="head"><h2>Incidents</h2><button class="btn primary sm" type="button" data-act="add" data-t="incidents" data-def="${J({ edition_id: id, occurred_on: today(), status: 'Ouvert' })}">+ Incident</button></div><div class="list">${incidents.map(x => `<button type="button" class="row click" data-act="edit" data-t="incidents" data-id="${x.id}"><span class="stripe ${x.status === 'Clos' ? '' : 'bad'}"></span><div class="grow"><div><b>${esc(x.type)}</b> · ${fmtD(x.occurred_on)} ${pill(x.status, x.status === 'Clos' ? 'good' : 'warn')}</div><div class="sub">${esc(x.description)}</div>${x.decision ? `<div class="sub">Décision : ${esc(x.decision)}</div>` : ''}</div></button>`).join('') || '<div class="empty-state">Aucun incident</div>'}</div></div>`;
   if (edTab === 'budget') body = budgetVsReal(s, D);
 
@@ -762,6 +902,9 @@ async function participantDetail(id) {
   <div class="sub-section"><div class="head"><h3>Paiement</h3><span class="num">${EUR(b.net)} / ${EUR(b.due)}</span></div>${pbar(b.pct)}<div class="muted">${b.reste > 1 ? `Il manque <b>${EUR(b.reste)}</b>` : 'Tout est payé'}${b.refund ? ` · remboursé ${EUR(b.refund)}` : ''}</div>
   <table><tbody>${b.pays.map(x => `<tr class="click" data-act="edit" data-t="payments" data-id="${x.id}" data-back="${back}"><td>${fmtD(x.paid_on)}</td><td>${x.kind === 'Remboursement' ? pill('Remboursement', 'bad') : esc(x.account || '')}</td><td class="n">${NUM(x.amount)} ${x.currency}</td><td class="n">${EUR(x.eur_final)}</td></tr>`).join('') || '<tr><td class="muted">Aucun paiement</td></tr>'}</tbody></table>
   <button class="btn sm" type="button" data-act="add" data-t="payments" data-def="${J({ participant_id: id, edition_id: p.edition_id, currency: p.pay_currency, fx_rate: p.pay_currency === 'TND' ? fx() : 1, paid_on: today(), kind: 'Paiement' })}" data-back="${back}">+ Paiement</button></div>
+  ${schedSection(p, { pays: allPays.concat((S.cache.payments || []).filter(x => x.participant_id !== id)), sched: await q(sb.from('payment_schedule').select('*').eq('participant_id', id)), parts: [p], eds: S.cache.editions }, back)}
+  <div class="sub-section portal"><div class="head"><h3>Son espace personnel</h3></div><p class="muted">Un lien privé où ${esc(p.full_name.split(' ')[0])} voit ce qu’il a payé, ce qui reste, son échéancier, et dépose lui-même passeport, billets et contrat signé.</p>
+  <div class="inline"><input readonly value="${esc(portalUrl(p))}" id="portalUrl" aria-label="Lien de l’espace personnel"><button class="btn sm" type="button" data-act="copyportal">Copier</button>${p.phone ? `<a class="btn sm primary" target="_blank" rel="noopener" href="${wa(p.phone)}?text=${encodeURIComponent(`Salut ${p.full_name.split(' ')[0]} ! Voici ton espace The Circle : paiements, échéancier et documents à déposer (passeport, billets, contrat). ${portalUrl(p)}`)}">Envoyer</a>` : ''}</div></div>
   <div class="sub-section"><div class="head"><h3>Fichiers personnels</h3><button class="btn sm primary" type="button" data-act="add" data-t="participant_files" data-def="${J({ participant_id: id })}" data-back="${back}">+ Joindre un fichier</button></div>
   <div class="list">${files.map(f => `<div class="row"><div class="grow click" data-act="file" data-path="${esc(f.file_path)}"><b>${esc(f.doc_type)}</b><div class="sub">${esc(f.file_name || f.file_path.split('/').pop())} · ${fmtD((f.uploaded_at || '').slice(0, 10))}${f.notes ? ' · ' + esc(f.notes) : ''}</div></div><button class="btn sm" type="button" data-act="file" data-path="${esc(f.file_path)}">Ouvrir</button><button class="btn sm" type="button" data-act="edit" data-t="participant_files" data-id="${f.id}" data-back="${back}">Modifier</button></div>`).join('') || '<div class="empty-state">Aucun fichier joint (contrat, passeport, billets…)</div>'}</div>
   <h3 style="margin-top:12px">Dossier (cliquez pour cocher si reçu sans fichier)</h3>
@@ -786,11 +929,12 @@ V.finances = async arg => {
   const tot = k => sum(all, s => k(s));
   const clar = clarify(D, finEdition);
   const pn = id => D.parts.find(p => p.id === id)?.full_name || '—';
-  const tabs = [['resume', 'Vue d’ensemble'], ['entrees', 'Entrées'], ['depenses', 'Dépenses'], ['gain', 'Gain fondateurs'], ['comptes', 'Comptes & circuit de l’argent'], ['clarifier', `À clarifier (${sum(clar.filter(g => g.kind !== 'mute'), g => g.items.length)})`]];
+  const tabs = [['resume', 'Vue d’ensemble'], ['entrees', 'Entrées'], ['depenses', 'Dépenses'], ['gain', 'Gain fondateurs'], ['tresorerie', 'Trésorerie à venir'], ['comptes', 'Comptes & circuit de l’argent'], ['clarifier', `À clarifier (${sum(clar.filter(g => g.kind !== 'mute'), g => g.items.length)})`]];
   let body = '';
   if (finTab === 'resume') body = `<div class="grid g4">${kpi('Encaissé', EUR(tot(s => s.enc)), `sur ${EUR(tot(s => s.attendu))} attendus`)}${kpi('Reste à encaisser', EUR(tot(s => s.reste)), `${sum(all, s => s.parts.filter(b => b.reste > 1).length)} personne(s)`)}${kpi('Dépenses', EUR(tot(s => s.couts)), 'hors avances sur gain')}${kpi('Gain chacun aujourd’hui', EUR(tot(s => s.now.part)), `prévu : ${EUR(tot(s => s.prev.part))}`)}</div>
     <div class="card"><div class="head"><h2>Par édition</h2></div><div class="table-wrap"><table><thead><tr><th>Édition</th><th style="min-width:160px">Encaissement</th><th class="n">Encaissé</th><th class="n">Reste</th><th class="n">Dépenses</th><th class="n">Résultat</th><th class="n">Gain chacun (prévu)</th></tr></thead><tbody>${all.map(s => `<tr class="click" data-act="go" data-href="#edition/${s.ed.id}"><td><b>${esc(s.ed.skill)}</b><div class="muted">${s.ed.id}</div></td><td>${pbar(s.attendu ? s.enc / s.attendu : 0)}</td><td class="n">${EUR(s.enc)}</td><td class="n">${EUR(s.reste)}</td><td class="n">${EUR(s.couts)}</td><td class="n">${EUR(s.now.res)}</td><td class="n">${EUR(s.prev.part)}</td></tr>`).join('')}</tbody></table></div><p class="muted">Les éditions de l’été 2026 n’ont que les encaissements importés du Drive : leurs dépenses restent à saisir.</p></div>`;
-  if (finTab === 'entrees') body = all.filter(s => s.parts.length || s.pays.length).map(s => `<div class="card"><div class="head"><h2>${esc(s.ed.skill)} · ${s.ed.id}</h2><span class="muted">${EUR(s.enc)} / ${EUR(s.attendu)} · manque ${EUR(s.reste)}</span></div>${pbar(s.attendu ? s.enc / s.attendu : 0, `${Math.round(s.attendu ? s.enc / s.attendu * 100 : 0)} % encaissé`)}<div style="height:10px"></div>${payBars(s.parts)}<details class="more-detail"><summary>Voir les ${s.pays.length} encaissements en détail</summary>${payTable(s.pays, pn)}</details></div>`).join('') || '<div class="card"><div class="empty-state">Aucun encaissement</div></div>';
+  if (finTab === 'tresorerie') body = tresorerie(D);
+  if (finTab === 'entrees') body = echeancesCard(D, finEdition) + all.filter(s => s.parts.length || s.pays.length).map(s => `<div class="card"><div class="head"><h2>${esc(s.ed.skill)} · ${s.ed.id}</h2><span class="muted">${EUR(s.enc)} / ${EUR(s.attendu)} · manque ${EUR(s.reste)}</span></div>${pbar(s.attendu ? s.enc / s.attendu : 0, `${Math.round(s.attendu ? s.enc / s.attendu * 100 : 0)} % encaissé`)}<div style="height:10px"></div>${payBars(s.parts)}<details class="more-detail"><summary>Voir les ${s.pays.length} encaissements en détail</summary>${payTable(s.pays, pn)}</details></div>`).join('') || '<div class="card"><div class="empty-state">Aucun encaissement</div></div>';
   if (finTab === 'depenses') {
     const exps = (finEdition ? D.exps.filter(x => x.edition_id === finEdition) : D.exps).filter(x => !expCat || x.category === expCat);
     const cats = {}; (finEdition ? D.exps.filter(x => x.edition_id === finEdition) : D.exps).filter(x => x.type !== 'Frais fondateurs').forEach(x => cats[x.category] = (cats[x.category] || 0) + N(x.amount_eur));
@@ -888,6 +1032,7 @@ V.reglages = async () => {
   const hidden = S.cache.editions.filter(e => e.hidden);
   return `<div class="split"><div class="card"><div class="head"><h2>Paramètres de calcul</h2></div><div class="form">${S.settingsRows.sort((a, b) => a.key.localeCompare(b.key)).map(s => `<label class="field">${esc(s.description || s.key)}<div class="inline"><input type="text" value="${esc(s.value)}" id="set_${esc(s.key)}"><button class="btn sm" type="button" data-act="saveset" data-id="${esc(s.key)}">Enregistrer</button></div></label>`).join('')}</div></div>
   <div class="card"><div class="head"><h2>Comptes</h2><button class="btn sm primary" type="button" data-act="add" data-t="accounts" data-def="${J({ currency: 'EUR', sort: 100 })}">+ Compte</button></div><div class="list">${S.cache.accounts.map(a => `<button type="button" class="row click" data-act="edit" data-t="accounts" data-id="${esc(a.name)}"><div><b>${esc(a.name)}</b> <span class="muted">${esc(a.currency || '')}</span><div class="sub">${esc(a.holder || '')}${a.notes ? ' · ' + esc(a.notes) : ''}</div></div></button>`).join('')}</div>
+  <div class="head" style="margin-top:14px"><h2>Sauvegarde</h2></div><p class="muted">Téléchargez toute la base (un fichier JSON complet, ou des CSV lisibles dans Excel). Une copie est aussi faite automatiquement chaque mois dans le Drive.</p><div class="inline"><button class="btn sm primary" type="button" data-act="export" data-v="json">Tout télécharger (JSON)</button><button class="btn sm" type="button" data-act="export" data-v="csv">Finances en CSV (Excel)</button></div>
   <div class="head" style="margin-top:14px"><h2>Éditions masquées</h2></div><div class="list">${hidden.map(e => `<button type="button" class="row click" data-act="edit" data-t="editions" data-id="${e.id}"><div>${esc(e.skill)} · ${e.id}<div class="sub">Ouvrir et décocher « Masquer » pour la réafficher</div></div></button>`).join('') || '<div class="empty-state">Aucune</div>'}</div></div></div>`;
 };
 
@@ -935,6 +1080,10 @@ document.addEventListener('click', async e => {
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
     case 'qsave': quickSave(); break;
+    case 'mksched': { const p = (S.cache.participants || []).find(x => x.id === d.id) || await q(sb.from('participants').select('*').eq('id', d.id).single()); if (!S.cache.payments) await loadData(); schedForm(p); break; }
+    case 'copyportal': { const i = $('portalUrl'); i.select(); try { await navigator.clipboard.writeText(i.value); } catch (_) { document.execCommand('copy'); } toast('Lien copié'); break; }
+    case 'print': window.print(); break;
+    case 'export': exportAll(d.v); break;
     case 'week': weekDrawer(d.ed, d.i, d.a, d.b); break;
     case 'mkposte': await q(sb.from('edition_budget_lines').insert({ edition_id: d.ed, category: d.cat, amount_eur: Number(d.amt) || 0, match_categories: d.cat, paid: !d.unpaid, paid_on: d.unpaid ? null : today(), sort: 50, notes: 'Créé depuis les dépenses' })); toast(`Poste « ${d.cat} » créé${d.unpaid ? '' : ' et marqué payé'}`); route(); break;
     case 'togglepaid': {
