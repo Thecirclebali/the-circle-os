@@ -368,3 +368,7 @@ tr.hl td{background:var(--accent-soft)}
 .splitprev{display:flex;flex-direction:column;gap:4px}
 .spl{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:var(--surface)}
 .spl.tot{background:transparent;border-top:1px solid var(--line);border-radius:0;margin-top:4px}
+.hist{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto}
+.hi{display:flex;gap:10px;font-size:13px;padding:6px 8px;border-radius:8px}.hi:nth-child(odd){background:var(--surface-2)}
+.hi .sd{color:var(--muted);flex:none;width:110px;font-size:12px}
+#portalMsg{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface-2);color:var(--ink);font-size:14px;line-height:1.45}

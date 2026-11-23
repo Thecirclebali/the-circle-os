@@ -674,13 +674,40 @@ function bilanHtml(id, D, journal, incidents) {
 /* ---------- Historique & export ---------- */
 const TBL = { participants: 'Participant', payments: 'Encaissement', expenses: 'Dépense', edition_budget_lines: 'Poste fixe', transfers: 'Transfert', leads: 'Prospect', editions: 'Édition', incidents: 'Incident', referral_rewards: 'Parrainage', settings: 'Réglage', accounts: 'Compte', payment_schedule: 'Échéance', partners: 'Partenaire', cash_counts: 'Comptage caisse' };
 const SKIP = ['created_at', 'updated_at', 'amount_eur', 'eur_final', 'referral_code', 'portal_token'];
+const FIELD = { full_name: 'nom', phone: 'téléphone', email: 'e-mail', price_eur: 'prix', status: 'statut', room_type: 'chambre', edition_id: 'bootcamp', amount: 'montant', currency: 'devise', paid_on: 'date', spent_on: 'date', account: 'compte', paid_from: 'compte', paid_by: 'payé par', category: 'catégorie', description: 'description', type: 'type', notes: 'notes', kind: 'type', due_on: 'échéance', amount_eur: 'montant', label: 'libellé', paid: 'payé', founder: 'fondateur', eur_received: 'euros obtenus', reimbursed: 'remboursé', emergency_contact: 'contact d’urgence', instagram: 'Instagram', birth_date: 'naissance', next_followup: 'prochaine relance', last_contact: 'dernier contact', club_status: 'Circle Club', referred_by: 'parrainé par', value: 'valeur', cancelled: 'annulée', match_categories: 'catégories liées', actual_manual: 'réel forcé', due_date: 'à payer avant' };
+const fmtV = (k, v) => v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'oui' : 'non') : /(_on|date|followup|contact)$/.test(k) && /^\d{4}-\d{2}-\d{2}/.test(v) ? fmtD(String(v).slice(0, 10)) : /^(price_eur|amount_eur|eur_received|actual_manual)$/.test(k) ? EUR(v) : String(v).length > 60 ? String(v).slice(0, 60) + '…' : String(v);
 function auditLabel(a) {
   const r = a.new || a.old || {};
   const name = r.full_name || r.description || r.category || r.title || r.name || r.label || r.key || r.kind || '';
   let ch = '';
-  if (a.action === 'UPDATE' && a.old && a.new) ch = Object.keys(a.new).filter(k => !SKIP.includes(k) && JSON.stringify(a.new[k]) !== JSON.stringify(a.old[k])).slice(0, 4).map(k => `${k} : ${a.old[k] ?? '—'} → ${a.new[k] ?? '—'}`).join(' · ');
-  else if (r.amount != null) ch = `${NUM(r.amount)} ${r.currency || ''}`; else if (r.amount_eur != null) ch = EUR(r.amount_eur);
+  if (a.action === 'UPDATE' && a.old && a.new) ch = Object.keys(a.new).filter(k => !SKIP.includes(k) && JSON.stringify(a.new[k]) !== JSON.stringify(a.old[k])).slice(0, 5).map(k => `${FIELD[k] || k} : ${fmtV(k, a.old[k])} → ${fmtV(k, a.new[k])}`).join(' · ');
+  else if (r.amount != null) ch = `${NUM(r.amount)} ${r.currency || ''}${r.paid_on || r.spent_on ? ' · ' + fmtD(r.paid_on || r.spent_on) : ''}`; else if (r.amount_eur != null) ch = `${EUR(r.amount_eur)}${r.due_on ? ' · échéance ' + fmtD(r.due_on) : ''}`;
   return { name, ch };
+}
+const ACTION_FR = { INSERT: 'a ajouté', UPDATE: 'a modifié', DELETE: 'a supprimé' };
+async function auditFor(pid) {
+  const [rows, team] = await Promise.all([q(sb.from('audit_log').select('*').or(`row_id.eq.${pid},new->>participant_id.eq.${pid},old->>participant_id.eq.${pid}`).order('at', { ascending: false }).limit(40)), q(sb.from('team_members').select('user_id,display_name'))]);
+  const who = id => team.find(m => m.user_id === id)?.display_name || 'Claude (import)';
+  return rows.map(a => { const { name, ch } = auditLabel(a); return { at: a.at, who: who(a.user_id), txt: `${who(a.user_id)} ${ACTION_FR[a.action]} ${(TBL[a.tbl] || a.tbl).toLowerCase()}${name && a.tbl !== 'participants' ? ' « ' + name + ' »' : ''}${ch ? ' : ' + ch : ''}` }; });
+}
+/* Envoi du lien : aperçu clair avant d'envoyer */
+async function sendPortalDrawer(pid) {
+  const D = await loadData(); const p = D.parts.find(x => x.id === pid) || await q(sb.from('participants').select('*').eq('id', pid).single());
+  const s = schedOf(p, D), b = s.b, ed = D.eds.find(e => e.id === p.edition_id);
+  const files = await q(sb.from('participant_files').select('doc_type').eq('participant_id', pid)), docs = await q(sb.from('participant_documents').select('doc_type,received').eq('participant_id', pid));
+  const got = new Set([...files.map(f => f.doc_type), ...docs.filter(d => d.received).map(d => d.doc_type)]);
+  const miss = ['Passeport', 'Billets', 'Contrat', 'Assurance'].filter(k => !got.has(k));
+  const hist = await auditFor(pid);
+  const first = p.full_name.split(' ')[0];
+  const next = s.items.filter(i => i.rest > 1);
+  const msg = [`Salut ${first} ! Voici ton espace The Circle (${ed?.skill || ''}, ${fmtD(ed?.start_date)}) :`, portalUrl(p), '', `Payé : ${EUR(b.net)} sur ${EUR(b.due)}${b.reste > 1 ? ` · reste ${EUR(b.reste)}` : ' ✅'}`, ...(next.length ? ['Prochaines échéances :', ...next.slice(0, 4).map(i => `• ${fmtD(i.due_on)} : ${EUR(i.rest)}${i.st === 'En retard' ? ' (en retard)' : ''}`)] : []), ...(miss.length ? ['', `À déposer dans ton espace : ${miss.join(', ')}.`] : []), '', 'Le lien est personnel, ne le partage pas. À très vite à Bali 🌴'].join('\n');
+  openDrawer(`${drawerHead('Envoyer son espace à ' + esc(first))}
+  <div class="sub-section"><h3>Ce que ${esc(first)} va voir</h3><div class="kv"><span>Payé</span><b>${EUR(b.net)} / ${EUR(b.due)}</b><span>Reste</span><b>${b.reste > 1 ? EUR(b.reste) : 'rien ✅'}</b><span>Échéancier</span><b>${s.has ? `${s.items.length} tranches · ${s.late ? `<span class="neg">${EUR(s.late)} en retard</span>` : 'à jour'}` : '<span class="warn-t">pas encore créé</span>'}</b><span>Documents manquants</span><b>${miss.join(', ') || 'aucun'}</b></div>${s.has ? '' : `<p class="muted">Sans échéancier, il verra seulement le total et le reste. <a href="#" data-act="mksched" data-id="${pid}">Créer l’échéancier d’abord</a></p>`}</div>
+  <div class="sub-section"><h3>Dernières modifications de sa fiche</h3><p class="muted">Ce qui a été changé, par qui, avant d’envoyer.</p><div class="hist">${hist.slice(0, 12).map(h => `<div class="hi"><span class="sd">${new Date(h.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${new Date(h.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span><span class="grow">${esc(h.txt)}</span></div>`).join('') || '<div class="muted">Aucune modification depuis la mise en place de l’historique.</div>'}</div></div>
+  <div class="sub-section"><h3>Le message</h3><textarea id="portalMsg" rows="11">${esc(msg)}</textarea>
+  <div class="inline">${p.phone ? `<a class="btn primary" id="sendWa" target="_blank" rel="noopener" href="${wa(p.phone)}?text=${encodeURIComponent(msg)}">Envoyer sur WhatsApp</a>` : ''}${p.email ? `<a class="btn" id="sendMail" href="mailto:${esc(p.email)}?subject=${encodeURIComponent('Ton espace The Circle Bali')}&body=${encodeURIComponent(msg)}">Envoyer par e-mail</a>` : ''}<button class="btn" type="button" data-act="copymsg">Copier le message</button></div>
+  <p class="muted">WhatsApp s’ouvre depuis votre numéro, et l’e-mail depuis la messagerie de cet ordinateur : rien ne part sans que vous appuyiez sur Envoyer.</p></div>`);
+  $('portalMsg').oninput = e => { const v = e.target.value; if ($('sendWa')) $('sendWa').href = `${wa(p.phone)}?text=${encodeURIComponent(v)}`; if ($('sendMail')) $('sendMail').href = `mailto:${p.email}?subject=${encodeURIComponent('Ton espace The Circle Bali')}&body=${encodeURIComponent(v)}`; };
 }
 const historiqueView = async () => {
   setHead('Historique', 'Qui a modifié quoi et quand. Rien ne peut être effacé de cet historique.');
@@ -960,7 +987,7 @@ async function participantDetail(id) {
   <button class="btn sm" type="button" data-act="add" data-t="payments" data-def="${J({ participant_id: id, edition_id: p.edition_id, currency: p.pay_currency, fx_rate: p.pay_currency === 'TND' ? fx() : 1, paid_on: today(), kind: 'Paiement' })}" data-back="${back}">+ Paiement</button></div>
   ${schedSection(p, { pays: allPays.concat((S.cache.payments || []).filter(x => x.participant_id !== id)), sched: await q(sb.from('payment_schedule').select('*').eq('participant_id', id)), parts: [p], eds: S.cache.editions }, back)}
   <div class="sub-section portal"><div class="head"><h3>Son espace personnel</h3></div><p class="muted">Un lien privé où ${esc(p.full_name.split(' ')[0])} voit ce qu’il a payé, ce qui reste, son échéancier, et dépose lui-même passeport, billets et contrat signé.</p>
-  <div class="inline"><input readonly value="${esc(portalUrl(p))}" id="portalUrl" aria-label="Lien de l’espace personnel"><button class="btn sm" type="button" data-act="copyportal">Copier</button>${p.phone ? `<a class="btn sm primary" target="_blank" rel="noopener" href="${wa(p.phone)}?text=${encodeURIComponent(`Salut ${p.full_name.split(' ')[0]} ! Voici ton espace The Circle : paiements, échéancier et documents à déposer (passeport, billets, contrat). ${portalUrl(p)}`)}">Envoyer</a>` : ''}</div></div>
+  <div class="inline"><input readonly value="${esc(portalUrl(p))}" id="portalUrl" aria-label="Lien de l’espace personnel"><button class="btn sm" type="button" data-act="copyportal">Copier</button><button class="btn sm primary" type="button" data-act="sendportal" data-id="${id}">Vérifier et envoyer</button></div></div>
   <div class="sub-section"><div class="head"><h3>Fichiers personnels</h3><button class="btn sm primary" type="button" data-act="add" data-t="participant_files" data-def="${J({ participant_id: id })}" data-back="${back}">+ Joindre un fichier</button></div>
   <div class="list">${files.map(f => `<div class="row"><div class="grow click" data-act="file" data-path="${esc(f.file_path)}"><b>${esc(f.doc_type)}</b><div class="sub">${esc(f.file_name || f.file_path.split('/').pop())} · ${fmtD((f.uploaded_at || '').slice(0, 10))}${f.notes ? ' · ' + esc(f.notes) : ''}</div></div><button class="btn sm" type="button" data-act="file" data-path="${esc(f.file_path)}">Ouvrir</button><button class="btn sm" type="button" data-act="edit" data-t="participant_files" data-id="${f.id}" data-back="${back}">Modifier</button></div>`).join('') || '<div class="empty-state">Aucun fichier joint (contrat, passeport, billets…)</div>'}</div>
   <h3 style="margin-top:12px">Dossier (cliquez pour cocher si reçu sans fichier)</h3>
@@ -1086,7 +1113,12 @@ V.reglages = async () => {
   await ensureLookups(true);
   setHead('Réglages', 'Taux de change, part d’investissement, parrainage, comptes, éditions masquées.');
   const hidden = S.cache.editions.filter(e => e.hidden);
+  [S.team, S.invites] = await Promise.all([q(sb.from('team_members').select('*')), q(sb.from('team_invites').select('*'))]);
+  setTimeout(() => { const f = $('inviteForm'); if (f) f.onsubmit = async ev => { ev.preventDefault(); await q(sb.from('team_invites').upsert({ email: f.e.value.trim().toLowerCase(), display_name: f.n.value.trim(), role: 'Fondatrice', claimed_at: null })); toast(`Accès donné à ${f.n.value.trim()} : elle peut se connecter`); route(); }; }, 0);
   return `<div class="split"><div class="card"><div class="head"><h2>Paramètres de calcul</h2></div><div class="form">${S.settingsRows.sort((a, b) => a.key.localeCompare(b.key)).map(s => `<label class="field">${esc(s.description || s.key)}<div class="inline"><input type="text" value="${esc(s.value)}" id="set_${esc(s.key)}"><button class="btn sm" type="button" data-act="saveset" data-id="${esc(s.key)}">Enregistrer</button></div></label>`).join('')}</div></div>
+  <div class="card"><div class="head"><h2>Équipe</h2></div><div class="list">${(S.team || []).map(m => `<div class="row"><div class="avatar sm">${esc(m.display_name.slice(0, 1))}</div><div class="grow"><b>${esc(m.display_name)}</b><div class="sub">${esc(m.role || '')} · accès complet</div></div>${pill('actif', 'good')}</div>`).join('')}${(S.invites || []).filter(i => !i.claimed_at).map(i => `<div class="row"><div class="avatar sm">${esc(i.display_name.slice(0, 1))}</div><div class="grow"><b>${esc(i.display_name)}</b><div class="sub">${esc(i.email)} · invitée, pas encore connectée</div></div>${pill('en attente', 'warn')}</div>`).join('')}</div>
+  <form class="form" id="inviteForm"><div class="fwrap half"><label class="field">Prénom<input name="n" required placeholder="Nahed"></label></div><div class="fwrap half"><label class="field">Son e-mail<input type="email" name="e" required placeholder="adresse@exemple.com"></label></div><div class="fwrap full"><button class="btn primary" type="submit">Donner l’accès</button></div></form>
+  <p class="muted">Elle ouvre ensuite ${esc(location.origin + location.pathname)}, tape cet e-mail, clique sur le lien reçu : elle arrive directement dans l’app avec un accès complet. Chaque modification de l’un ou de l’autre est signée dans l’Historique.</p></div>
   <div class="card"><div class="head"><h2>Comptes</h2><button class="btn sm primary" type="button" data-act="add" data-t="accounts" data-def="${J({ currency: 'EUR', sort: 100 })}">+ Compte</button></div><div class="list">${S.cache.accounts.map(a => `<button type="button" class="row click" data-act="edit" data-t="accounts" data-id="${esc(a.name)}"><div><b>${esc(a.name)}</b> <span class="muted">${esc(a.currency || '')}</span><div class="sub">${esc(a.holder || '')}${a.notes ? ' · ' + esc(a.notes) : ''}</div></div></button>`).join('')}</div>
   <div class="head" style="margin-top:14px"><h2>Sauvegarde</h2></div><p class="muted">Téléchargez toute la base (un fichier JSON complet, ou des CSV lisibles dans Excel). Une copie est aussi faite automatiquement chaque mois dans le Drive.</p><div class="inline"><button class="btn sm primary" type="button" data-act="export" data-v="json">Tout télécharger (JSON)</button><button class="btn sm" type="button" data-act="export" data-v="csv">Finances en CSV (Excel)</button></div>
   <div class="head" style="margin-top:14px"><h2>Éditions masquées</h2></div><div class="list">${hidden.map(e => `<button type="button" class="row click" data-act="edit" data-t="editions" data-id="${e.id}"><div>${esc(e.skill)} · ${e.id}<div class="sub">Ouvrir et décocher « Masquer » pour la réafficher</div></div></button>`).join('') || '<div class="empty-state">Aucune</div>'}</div></div></div>`;
@@ -1136,6 +1168,8 @@ document.addEventListener('click', async e => {
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
     case 'qsave': quickSave(); break;
+    case 'sendportal': sendPortalDrawer(d.id); break;
+    case 'copymsg': { const v = $('portalMsg').value; try { await navigator.clipboard.writeText(v); } catch (_) { $('portalMsg').select(); document.execCommand('copy'); } toast('Message copié'); break; }
     case 'splitsave': {
       const ta = $('splitIn'), total = Number(ta.dataset.total), rows = parseSplit(ta.value, total, ta.dataset.cur);
       if (sum(rows, r => r.eur) - total > 1) { toast('Le détail dépasse le total : corrigez avant d’enregistrer', true); break; }
@@ -1285,6 +1319,7 @@ async function start(session) {
   if (!S.user) { S.member = null; return loginView(); }
   const { data } = await sb.from('team_members').select('*').eq('user_id', S.user.id).maybeSingle();
   S.member = data || null;
+  if (!S.member) { const { data: ok } = await sb.rpc('claim_invite'); if (ok) { const r = await sb.from('team_members').select('*').eq('user_id', S.user.id).maybeSingle(); S.member = r.data || null; } }
   if (!S.member) return notAllowedView();
   shell(); lastHash = location.hash.split('/')[0]; route();
 }
