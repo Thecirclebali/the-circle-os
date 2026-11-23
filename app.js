@@ -434,11 +434,11 @@ function budgetVsReal(s, D) {
   const P = postes(s.ed.id, D);
   const copy = `<div class="inline"><select id="cbFrom">${D.eds.filter(e => e.id !== s.ed.id && D.budget.some(b => b.edition_id === e.id)).map(e => `<option value="${e.id}">${esc(e.skill)} · ${e.id}</option>`).join('')}</select><button class="btn sm" type="button" data-act="copybudget" data-id="${s.ed.id}">Copier ces postes ici</button></div>`;
   return `<div class="card"><div class="head"><h2>Coûts fixes : prévu, réel, prévision</h2><span class="pill ${P.paidN === P.rows.length && P.has ? 'good' : 'mute'}">${P.paidN} / ${P.rows.length} soldés</span><button class="btn sm" type="button" data-act="add" data-t="edition_budget_lines" data-def="${J({ edition_id: s.ed.id, paid: false, sort: 50 })}">+ Poste</button></div>
-  <p class="muted">Cochez un poste quand il est entièrement payé. Le réel se calcule tout seul avec les dépenses de la même catégorie (ou forcez-le à la main dans le poste). La prévision = le réel si c’est payé, sinon le plus grand entre le prévu et le réel. C’est elle qui sert au gain « si tout est payé ».</p>
+  <p class="muted">Cochez un poste quand il est payé : si les dépenses saisies n’atteignent pas le prévu, la différence est ajoutée toute seule aux dépenses, et tout se met à jour (dépenses, gain, prévision, comptes). Si les dépenses saisies sont déjà justes, rien n’est ajouté. Décocher retire ce solde automatique.</p>
   ${P.has ? '' : `<div class="msg">Pas encore de postes pour cette édition. Copiez ceux d’une autre édition, puis ajustez.</div>${copy}`}
   <div class="postes">${P.rows.map(r => { const over = r.plan && r.real > r.plan; return `<div class="poste ${r.l.paid ? 'paid' : ''}">
     <button type="button" class="tick" data-act="togglepaid" data-id="${r.l.id}" data-v="${r.l.paid ? 0 : 1}" aria-label="${r.l.paid ? 'Marquer non payé' : 'Marquer payé'}">${r.l.paid ? ICON.check : ''}</button>
-    <div class="grow click" data-act="edit" data-t="edition_budget_lines" data-id="${r.l.id}"><div class="ph"><b>${esc(r.l.category)}</b>${r.manual ? pill('réel saisi à la main', 'mute') : ''}${r.l.due_date && !r.l.paid ? pill('avant le ' + fmtD(r.l.due_date), daysTo(r.l.due_date) < 0 ? 'bad' : 'warn') : ''}</div>
+    <div class="grow click" data-act="edit" data-t="edition_budget_lines" data-id="${r.l.id}"><div class="ph"><b>${esc(r.l.category)}</b>${r.manual ? pill('réel saisi à la main', 'mute') : ''}${D.exps.some(x => (x.notes || '').startsWith(`auto-poste:${r.l.id}`)) ? pill('solde ajouté en cochant', 'good') : ''}${r.l.due_date && !r.l.paid ? pill('avant le ' + fmtD(r.l.due_date), daysTo(r.l.due_date) < 0 ? 'bad' : 'warn') : ''}</div>
     ${r.plan ? pbar(r.real / r.plan, `${EUR(r.real)} / ${EUR(r.plan)}`).replace('class="pbar', `class="pbar ${over ? 'over' : ''}`) : ''}
     <div class="sub">${r.cats.length ? 'Dépenses : ' + esc(r.cats.join(', ')) : 'Tout ce qui n’entre dans aucun autre poste'}${r.detail ? ' · ' + esc(r.detail) : ''}</div></div>
     <div class="pv"><small>Prévision</small><b class="num">${EUR(r.prev)}</b><small class="${over ? 'neg' : r.real < r.plan && r.l.paid ? 'good-t' : ''}">${r.plan ? (r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan) : ''}</small></div></div>`; }).join('')}
@@ -937,7 +937,26 @@ document.addEventListener('click', async e => {
     case 'qsave': quickSave(); break;
     case 'week': weekDrawer(d.ed, d.i, d.a, d.b); break;
     case 'mkposte': await q(sb.from('edition_budget_lines').insert({ edition_id: d.ed, category: d.cat, amount_eur: Number(d.amt) || 0, match_categories: d.cat, paid: !d.unpaid, paid_on: d.unpaid ? null : today(), sort: 50, notes: 'Créé depuis les dépenses' })); toast(`Poste « ${d.cat} » créé${d.unpaid ? '' : ' et marqué payé'}`); route(); break;
-    case 'togglepaid': await q(sb.from('edition_budget_lines').update({ paid: d.v === '1', paid_on: d.v === '1' ? today() : null }).eq('id', d.id)); toast(d.v === '1' ? 'Poste marqué payé' : 'Poste remis à payer'); route(); break;
+    case 'togglepaid': {
+      const D = await loadData(); const line = D.budget.find(b => b.id === d.id); if (!line) break;
+      const P = postes(line.edition_id, D), r = P.rows.find(x => x.l.id === d.id);
+      let msg = '';
+      if (d.v === '1') {
+        const gap = r ? r.plan - r.real : 0;
+        if (r && !r.manual && gap > Math.max(5, r.plan * 0.02)) {
+          await q(sb.from('expenses').insert({ edition_id: line.edition_id, spent_on: today(), description: `${line.category} : solde payé`, category: r.cats[0] || 'Imprévus', amount: Math.round(gap * 100) / 100, currency: 'EUR', fx_rate: 1, type: 'Coût édition', paid_by: 'Caisse Circle', notes: `auto-poste:${line.id} · Créée en cochant le poste (prévu ${EUR(r.plan)}, déjà saisi ${EUR(r.real)}). Remplacez-la par la vraie dépense si le montant diffère.` }));
+          msg = ` · ${EUR(gap)} ajoutés aux dépenses pour atteindre le prévu`;
+        }
+        await q(sb.from('edition_budget_lines').update({ paid: true, paid_on: today() }).eq('id', d.id));
+        toast(`« ${line.category} » payé${msg || ' · les dépenses saisies correspondent déjà'}`);
+      } else {
+        const auto = D.exps.filter(x => (x.notes || '').startsWith(`auto-poste:${line.id}`));
+        for (const x of auto) await q(sb.from('expenses').delete().eq('id', x.id));
+        await q(sb.from('edition_budget_lines').update({ paid: false, paid_on: null }).eq('id', d.id));
+        toast(`« ${line.category} » remis à payer${auto.length ? ` · solde automatique de ${EUR(sum(auto, x => x.amount_eur))} retiré` : ''}`);
+      }
+      route(); break;
+    }
     case 'gained': S.gainEd = d.id; finEdition = ''; route(); break;
     case 'altab': e.preventDefault(); alTab = d.v; route(); break;
     case 'invited': await q(sb.from('participants').update({ club_status: 'Invité', last_contact: today() }).eq('id', d.id)); delete S.cache.participants; setTimeout(route, 300); break;
