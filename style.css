@@ -333,3 +333,14 @@ table.gain tr.hl td:first-child{border-radius:10px 0 0 10px}table.gain tr.hl td:
   .hb{grid-template-columns:90px 1fr 70px}.clubgrid{grid-template-columns:1fr}.ptot{grid-template-columns:1fr 1fr}
   .pal{padding-top:6vh}
 }
+.tabctx{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;margin-right:4px;border-radius:99px;background:var(--surface);border:1px solid var(--line);font-size:13.5px;white-space:nowrap}
+.tabctx small{color:var(--muted);font-size:12px}
+.dotc{width:8px;height:8px;border-radius:50%;background:var(--accent)}.dotc.good{background:var(--good)}.dotc.warn{background:var(--sun)}.dotc.mute{background:var(--muted)}.dotc.bad{background:var(--bad)}
+.page-tabs{padding:10px 0;box-shadow:0 8px 12px -12px rgba(0,0,0,.25)}
+.tick.dis{cursor:pointer}.tick.dis:hover{border-style:solid;border-color:var(--good);background:var(--good-soft)}
+.addline{background:var(--surface-2);border:1px solid var(--line-2);border-radius:14px;padding:14px}
+.addline>button{justify-self:start}
+.list .row .r{text-align:right}
+.tabctx.sel{padding:3px 6px 3px 12px;border-color:var(--accent);background:var(--accent-soft);color:var(--accent);cursor:pointer}
+.tabctx.sel select{border:0;background:transparent;font-weight:600;font-size:14px;color:var(--ink);padding:5px 6px;cursor:pointer;max-width:260px}
+.tabctx.sel select:focus{outline:none}

@@ -10,7 +10,7 @@ const N = v => Number(v || 0);
 const EUR = n => n == null || n === '' || isNaN(n) ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(Number(n))) + ' €';
 const NUM = n => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(n);
 const fmtD = s => s ? new Date(s + (s.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const daysTo = s => Math.round((new Date(s + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
 const sum = (arr, f) => arr.reduce((s, x) => s + N(f(x)), 0);
 const fx = () => N(S.settings.fx_tnd) || C.fxTnd || 3.55;
@@ -442,7 +442,7 @@ function budgetVsReal(s, D) {
     ${r.plan ? pbar(r.real / r.plan, `${EUR(r.real)} / ${EUR(r.plan)}`).replace('class="pbar', `class="pbar ${over ? 'over' : ''}`) : ''}
     <div class="sub">${r.cats.length ? 'Dépenses : ' + esc(r.cats.join(', ')) : 'Tout ce qui n’entre dans aucun autre poste'}${r.detail ? ' · ' + esc(r.detail) : ''}</div></div>
     <div class="pv"><small>Prévision</small><b class="num">${EUR(r.prev)}</b><small class="${over ? 'neg' : r.real < r.plan && r.l.paid ? 'good-t' : ''}">${r.plan ? (r.real - r.plan > 0 ? '+' : '') + EUR(r.real - r.plan) : ''}</small></div></div>`; }).join('')}
-  ${P.extra.map(x => `<div class="poste"><span class="tick dis"></span><div class="grow"><b>${esc(x.name)}</b><div class="sub">Hors postes (ajoutez un poste « Imprévus » pour les regrouper)</div></div><div class="pv"><small>Réel</small><b class="num">${EUR(x.real)}</b></div></div>`).join('')}</div>
+  ${P.extra.map(x => `<div class="poste"><button type="button" class="tick dis" data-act="mkposte" data-ed="${s.ed.id}" data-cat="${esc(x.name)}" data-amt="${Math.round(x.real)}" title="Créer ce poste et le marquer payé" aria-label="Créer le poste ${esc(x.name)} et le marquer payé"></button><div class="grow click" data-act="mkposte" data-ed="${s.ed.id}" data-cat="${esc(x.name)}" data-amt="${Math.round(x.real)}" data-unpaid="1"><b>${esc(x.name)}</b><div class="sub">Pas encore un poste fixe. Cochez pour le créer et le marquer payé, ou cliquez pour le créer à payer.</div></div><div class="pv"><small>Réel</small><b class="num">${EUR(x.real)}</b></div></div>`).join('')}</div>
   ${P.has ? `<div class="ptot"><div><small>Prévu</small><b>${EUR(P.totPlan)}</b></div><div><small>Réel à ce jour</small><b>${EUR(P.totReal)}</b></div><div><small>Prévision finale</small><b>${EUR(P.totPrev)}</b></div><div><small>Écart prévu</small><b class="${P.totPrev > P.totPlan ? 'neg' : 'good-t'}">${(P.totPrev - P.totPlan > 0 ? '+' : '') + EUR(P.totPrev - P.totPlan)}</b></div></div>` : ''}</div>`;
 }
 const fraisOf = s => N(s.fraisChange);
@@ -464,17 +464,49 @@ function postes(id, D) {
 function envelope(s) {
   const e = s.ed; if (!e.start_date || !e.end_date) return '';
   const envIdr = N(S.settings.enveloppe_courses_idr) || 4000000, envEur = toEur(envIdr, 'IDR');
-  const start = new Date(e.start_date + 'T00:00:00'), weeks = Math.ceil((new Date(e.end_date + 'T00:00:00') - start) / 864e5 / 7) || 1;
+  const start = new Date(e.start_date + 'T00:00:00Z'), weeks = Math.ceil((new Date(e.end_date + 'T00:00:00Z') - start) / 864e5 / 7) || 1;
   const ex = s.costs.filter(x => ['Courses maison', 'Petites dépenses'].includes(x.category));
-  const rows = []; for (let i = 0; i < weeks; i++) { const a = new Date(+start + i * 7 * 864e5).toISOString().slice(0, 10), b = new Date(+start + (i + 1) * 7 * 864e5).toISOString().slice(0, 10); rows.push({ i, a, v: sum(ex.filter(x => x.spent_on && x.spent_on >= a && x.spent_on < b), x => x.amount_eur) }); }
+  const rows = []; for (let i = 0; i < weeks; i++) { const a = new Date(+start + i * 7 * 864e5).toISOString().slice(0, 10), b = new Date(+start + (i + 1) * 7 * 864e5).toISOString().slice(0, 10); const wk = ex.filter(x => x.spent_on && x.spent_on >= a && x.spent_on < b); rows.push({ i, a, v: sum(wk, x => x.amount_eur), n: wk.length }); }
   const outside = sum(ex.filter(x => !x.spent_on || x.spent_on < e.start_date || x.spent_on >= new Date(+start + weeks * 7 * 864e5).toISOString().slice(0, 10)), x => x.amount_eur);
   return `<div class="card"><div class="head"><h2>Enveloppe courses & petites dépenses</h2><span class="muted">${IDR(envIdr)} ≈ ${EUR(envEur)} par semaine · modifiable dans Réglages</span></div>
-  <div class="paybars">${rows.map(r => `<div class="paybar"><div class="pb-head"><b>Semaine ${r.i + 1}</b><span class="muted">dès le ${fmtD(r.a)}</span><span class="num">${EUR(r.v)} / ${EUR(envEur)}</span></div>${pbar(r.v / envEur).replace('class="pbar', `class="pbar ${r.v > envEur ? 'over' : ''}`)}</div>`).join('')}</div>
-  ${outside ? `<p class="muted">${EUR(outside)} de courses hors des semaines du bootcamp (avant, après ou sans date).</p>` : ''}<p class="muted">Pas besoin de noter chaque bouteille d’eau : une ligne « courses semaine 2 » avec la photo des tickets suffit.</p></div>`;
+  <div class="paybars">${rows.map(r => `<button type="button" class="paybar click" data-act="week" data-ed="${e.id}" data-i="${r.i}" data-a="${r.a}" data-b="${new Date(+start + (r.i + 1) * 7 * 864e5).toISOString().slice(0, 10)}"><div class="pb-head"><b>Semaine ${r.i + 1}</b><span class="muted">dès le ${fmtD(r.a)}</span><span class="num">${EUR(r.v)} / ${EUR(envEur)}</span></div>${pbar(r.v / envEur).replace('class="pbar', `class="pbar ${r.v > envEur ? 'over' : ''}`)}<div class="pb-foot">${r.n} achat(s) · cliquez pour voir, ajouter ou modifier</div></button>`).join('')}</div>
+  ${outside ? `<p class="muted">${EUR(outside)} de courses hors des semaines du bootcamp (avant, après ou sans date).</p>` : ''}<p class="muted">Cliquez sur une semaine pour voir le détail des achats, en ajouter ou les corriger. Pas besoin de noter chaque bouteille d’eau : une ligne par passage au magasin suffit.</p></div>`;
 }
 function owesBox(D, edId) {
   const o = whoOwes(D, edId);
   return `<div class="card owes"><div class="head"><h2>Qui doit quoi à qui</h2></div>${o.length ? o.map(x => `<div class="row"><div class="grow">La caisse The Circle doit <b>${EUR(x.total)}</b> à <b>${esc(x.who)}</b><div class="sub">${x.n} dépense(s) avancée(s) de sa poche</div></div><button class="btn sm" type="button" data-act="reimburse" data-who="${esc(x.who)}" data-ed="${esc(edId || '')}">Marquer remboursé</button></div>`).join('') : '<div class="empty-state">Personne n’a d’argent à récupérer</div>'}</div>`;
+}
+
+async function weekDrawer(ed, i, a, b) {
+  const items = await q(sb.from('expenses').select('*').eq('edition_id', ed).in('category', ['Courses maison', 'Petites dépenses']).gte('spent_on', a).lt('spent_on', b).order('spent_on'));
+  const envEur = toEur(N(S.settings.enveloppe_courses_idr) || 4000000, 'IDR'), tot = sum(items, x => x.amount_eur);
+  const last = new Date(new Date(b + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10), d0 = today() >= a && today() < b ? today() : a;
+  openDrawer(`${drawerHead(`Courses · semaine ${Number(i) + 1}`)}
+  <div class="muted">${fmtD(a)} → ${fmtD(last)}</div>
+  ${pbar(tot / envEur, `${EUR(tot)} / ${EUR(envEur)}`).replace('class="pbar', `class="pbar ${tot > envEur ? 'over' : ''}`)}
+  <form class="form addline" id="wkForm"><div class="fwrap full"><label class="field">Ce qui a été acheté<input name="d" required placeholder="Ex. eau, fruits, œufs, café"></label></div>
+  <div class="fwrap half"><label class="field">Prix<input name="m" required placeholder="Ex. 350k ou 85000 ou 12€"></label></div>
+  <div class="fwrap half"><label class="field">Date<input type="date" name="t" value="${d0}" min="${a}" max="${last}"></label></div>
+  <div class="fwrap half"><label class="field">Catégorie<select name="c"><option>Courses maison</option><option>Petites dépenses</option></select></label></div>
+  <div class="fwrap half"><label class="field">Payé avec<select name="f">${S.cache.accounts.map(x => `<option ${x.name === 'Caisse Bali (IDR)' ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label></div>
+  <div class="fwrap full"><label class="field">Photo du ticket (facultatif)<input type="file" name="p" accept="image/*,.pdf" capture="environment"></label></div>
+  <button class="btn primary" type="submit">+ Ajouter cet achat</button></form>
+  <div class="head"><h3>Achats de la semaine (${items.length})</h3><b class="num">${EUR(tot)}</b></div>
+  <div class="list">${items.map(x => `<button type="button" class="row click" data-act="edit" data-t="expenses" data-id="${x.id}" data-back="week:${ed}|${i}|${a}|${b}"><div class="grow"><b>${esc(x.description || x.category)}</b><div class="sub">${fmtD(x.spent_on)} · ${esc(x.paid_from || '')}${x.receipt_path ? ' · ticket joint' : ''}</div></div><div class="r"><b class="num">${money(x.amount, x.currency)}</b>${x.currency !== 'EUR' ? `<div class="sub">${EUR(x.amount_eur)}</div>` : ''}</div></button>`).join('') || '<div class="empty-state">Aucun achat noté cette semaine</div>'}</div>
+  <p class="muted">Cliquez sur un achat pour changer le prix, la date, l’article ou le supprimer.</p>`);
+  $('wkForm').onsubmit = async ev => {
+    ev.preventDefault(); const f = ev.target, btn = f.querySelector('[type=submit]'); btn.disabled = true;
+    try {
+      const am = parseAmounts(f.m.value)[0]; if (!am) { toast('Prix non compris : écrivez par ex. 350k, 85000 ou 12€', true); btn.disabled = false; return; }
+      const cur = am.cur || (am.mult || am.val >= 1000 ? 'IDR' : 'EUR');
+      const acc = S.cache.accounts.find(x => x.name === f.f.value);
+      const rec = { edition_id: ed, spent_on: f.t.value || d0, description: f.d.value.trim(), category: f.c.value, amount: am.val, currency: cur, fx_rate: rate(cur), type: 'Coût édition', paid_from: f.f.value, paid_by: 'Caisse Circle', notes: 'Ajouté depuis les courses de la semaine' };
+      if (f.p.files[0]) rec.receipt_path = await upload(f.p.files[0], 'expenses');
+      await q(sb.from('expenses').insert(rec)); toast(`Ajouté : ${rec.description} · ${money(am.val, cur)}`);
+      await weekDrawer(ed, i, a, b); route(); setTimeout(() => $('wkForm')?.d?.focus(), 50);
+    } catch (e) { btn.disabled = false; }
+  };
+  setTimeout(() => $('wkForm')?.d?.focus(), 250);
 }
 
 /* ---------- Comptes & circuit de l'argent ---------- */
@@ -666,7 +698,7 @@ V.edition = async id => {
   if (edTab === 'incidents') body = `<div class="card"><div class="head"><h2>Incidents</h2><button class="btn primary sm" type="button" data-act="add" data-t="incidents" data-def="${J({ edition_id: id, occurred_on: today(), status: 'Ouvert' })}">+ Incident</button></div><div class="list">${incidents.map(x => `<button type="button" class="row click" data-act="edit" data-t="incidents" data-id="${x.id}"><span class="stripe ${x.status === 'Clos' ? '' : 'bad'}"></span><div class="grow"><div><b>${esc(x.type)}</b> · ${fmtD(x.occurred_on)} ${pill(x.status, x.status === 'Clos' ? 'good' : 'warn')}</div><div class="sub">${esc(x.description)}</div>${x.decision ? `<div class="sub">Décision : ${esc(x.decision)}</div>` : ''}</div></button>`).join('') || '<div class="empty-state">Aucun incident</div>'}</div></div>`;
   if (edTab === 'budget') body = budgetVsReal(s, D);
 
-  return `<div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="tab" data-v="${k}" class="${edTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
+  return `<div class="tabs page-tabs"><label class="tabctx sel"><span class="dotc ${statusClass(e.status)}"></span><select data-go="edition" aria-label="Changer de bootcamp">${D.eds.filter(x => !x.hidden).map(x => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.skill)} · ${fmtD(x.start_date)}</option>`).join('')}</select></label>${tabs.map(([k, l]) => `<button type="button" data-act="tab" data-v="${k}" class="${edTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 };
 function payBars(parts) {
   if (!parts.length) return '<div class="empty-state">Aucun participant</div>';
@@ -780,7 +812,7 @@ V.finances = async arg => {
 
   if (finTab === 'comptes') body = comptesHtml(D);
   if (finTab === 'clarifier') body = `<p class="muted">Chaque ligne s’ouvre : corrigez directement et elle disparaît de la liste. Les totaux se recalculent seuls.</p>${clarifyHtml(clar)}`;
-  return `<div class="toolbar"><label for="finEd" class="muted">Édition</label><select id="finEd" data-var="finEdition">${edOpts(finEdition)}</select></div><div class="tabs page-tabs">${tabs.map(([k, l]) => `<button type="button" data-act="setvar" data-k="finTab" data-v="${k}" class="${finTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
+  return `<div class="tabs page-tabs"><label class="tabctx sel">${ICON.editions}<select data-var="finEdition" aria-label="Filtrer par bootcamp">${edOpts(finTab === 'gain' ? (finEdition || S.gainEd || currentEd()) : finEdition, 'Tous les bootcamps')}</select></label>${tabs.map(([k, l]) => `<button type="button" data-act="setvar" data-k="finTab" data-v="${k}" class="${finTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 };
 
 /* Alumni */
@@ -876,6 +908,7 @@ function backFn(back) {
   if (!back) return null;
   const [kind, id] = back.split(':');
   if (kind === 'part') return () => { route(); participantDetail(id); };
+  if (kind === 'week') { const [ed, i, a, b] = id.split('|'); return () => { route(); weekDrawer(ed, i, a, b); }; }
   if (kind === 'exp') return () => { route(); editById('expenses', id); };
   return null;
 }
@@ -902,6 +935,8 @@ document.addEventListener('click', async e => {
     case 'done': await q(sb.from('tasks').update({ done: true }).eq('id', d.id)); toast('Tâche faite'); route(); break;
     case 'contacted': { const nx = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10); await q(sb.from('participants').update({ last_contact: today(), next_followup: nx }).eq('id', d.id)); toast('Contact noté · prochaine relance le ' + fmtD(nx)); delete S.cache.participants; participantDetail(d.id); route(); break; }
     case 'qsave': quickSave(); break;
+    case 'week': weekDrawer(d.ed, d.i, d.a, d.b); break;
+    case 'mkposte': await q(sb.from('edition_budget_lines').insert({ edition_id: d.ed, category: d.cat, amount_eur: Number(d.amt) || 0, match_categories: d.cat, paid: !d.unpaid, paid_on: d.unpaid ? null : today(), sort: 50, notes: 'Créé depuis les dépenses' })); toast(`Poste « ${d.cat} » créé${d.unpaid ? '' : ' et marqué payé'}`); route(); break;
     case 'togglepaid': await q(sb.from('edition_budget_lines').update({ paid: d.v === '1', paid_on: d.v === '1' ? today() : null }).eq('id', d.id)); toast(d.v === '1' ? 'Poste marqué payé' : 'Poste remis à payer'); route(); break;
     case 'gained': S.gainEd = d.id; finEdition = ''; route(); break;
     case 'altab': e.preventDefault(); alTab = d.v; route(); break;
@@ -934,9 +969,10 @@ document.addEventListener('change', async e => {
     const rows = await q(sb.from('expenses').insert({ edition_id: S.ctxEdition || currentEd() || null, spent_on: today(), description: 'Ticket à compléter', category: 'À clarifier', amount: 0, currency: 'IDR', fx_rate: rate('IDR'), type: 'À clarifier', paid_from: 'Caisse Bali (IDR)', paid_by: 'Caisse Circle', receipt_path: path, notes: 'Créée depuis une photo' }).select());
     route(); if (rows?.[0]) editById('expenses', rows[0].id); return;
   }
+  if (e.target.dataset.go === 'edition') { location.hash = '#edition/' + e.target.value; return; }
   const v = e.target.dataset.var; if (!v) return;
   if (v === 'crmEdition') crmEdition = e.target.value;
-  if (v === 'finEdition') finEdition = e.target.value;
+  if (v === 'finEdition') { finEdition = e.target.value; if (finTab === 'gain' && finEdition) S.gainEd = finEdition; }
   if (v === 'expCat') expCat = e.target.value;
   route();
 });
